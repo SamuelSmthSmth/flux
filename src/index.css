@@ -1,0 +1,278 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* ========================================
+   MISTY — Global Design Tokens & Resets
+   Gemini-inspired premium aesthetic
+   ======================================== */
+
+:root {
+  /* --- Light Mode Palette --- */
+  --bg-primary: #f8f9fc;
+  --bg-secondary: rgba(255, 255, 255, 0.55);
+  --bg-tertiary: rgba(255, 255, 255, 0.7);
+  --bg-header: rgba(255, 255, 255, 0.72);
+
+  --text-primary: #1a1a2e;
+  --text-secondary: #5a5a7a;
+  --text-tertiary: #8e8ea0;
+  --text-inverse: #ffffff;
+
+  --border-primary: rgba(0, 0, 0, 0.06);
+  --border-secondary: rgba(0, 0, 0, 0.04);
+
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-soft: rgba(99, 102, 241, 0.08);
+  --accent-glow: rgba(99, 102, 241, 0.15);
+  --accent-secondary: #a78bfa;
+
+  --surface-glass: rgba(255, 255, 255, 0.6);
+  --surface-glass-border: rgba(255, 255, 255, 0.4);
+  --surface-hover: rgba(99, 102, 241, 0.06);
+
+  --glow-color-1: rgba(139, 92, 246, 0.12);
+  --glow-color-2: rgba(99, 102, 241, 0.08);
+  --glow-color-3: rgba(236, 72, 153, 0.06);
+
+  --pill-bg: rgba(0, 0, 0, 0.04);
+  --pill-active-bg: #ffffff;
+  --pill-active-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+
+  --checkbox-border: rgba(0, 0, 0, 0.18);
+  --checkbox-checked-bg: #6366f1;
+
+  --input-bg: rgba(0, 0, 0, 0.03);
+  --input-border: rgba(0, 0, 0, 0.08);
+  --input-focus-border: #6366f1;
+  --input-focus-glow: rgba(99, 102, 241, 0.15);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.08);
+
+  --danger: #ef4444;
+  --danger-soft: rgba(239, 68, 68, 0.08);
+  --success: #22c55e;
+
+  --blur-amount: 16px;
+  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+}
+
+/* --- Dark Mode --- */
+[data-theme="dark"] {
+  --bg-primary: #0f0f1a;
+  --bg-secondary: rgba(22, 22, 38, 0.65);
+  --bg-tertiary: rgba(30, 30, 50, 0.8);
+  --bg-header: rgba(15, 15, 30, 0.78);
+
+  --text-primary: #e8e8f0;
+  --text-secondary: #a0a0bc;
+  --text-tertiary: #6b6b88;
+  --text-inverse: #0f0f1a;
+
+  --border-primary: rgba(255, 255, 255, 0.06);
+  --border-secondary: rgba(255, 255, 255, 0.04);
+
+  --accent: #818cf8;
+  --accent-hover: #6366f1;
+  --accent-soft: rgba(129, 140, 248, 0.1);
+  --accent-glow: rgba(129, 140, 248, 0.2);
+  --accent-secondary: #c4b5fd;
+
+  --surface-glass: rgba(30, 30, 55, 0.55);
+  --surface-glass-border: rgba(255, 255, 255, 0.06);
+  --surface-hover: rgba(129, 140, 248, 0.08);
+
+  --glow-color-1: rgba(139, 92, 246, 0.18);
+  --glow-color-2: rgba(99, 102, 241, 0.12);
+  --glow-color-3: rgba(236, 72, 153, 0.08);
+
+  --pill-bg: rgba(255, 255, 255, 0.06);
+  --pill-active-bg: rgba(255, 255, 255, 0.12);
+  --pill-active-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.06);
+
+  --checkbox-border: rgba(255, 255, 255, 0.15);
+  --checkbox-checked-bg: #818cf8;
+
+  --input-bg: rgba(255, 255, 255, 0.04);
+  --input-border: rgba(255, 255, 255, 0.08);
+  --input-focus-border: #818cf8;
+  --input-focus-glow: rgba(129, 140, 248, 0.2);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
+
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.12);
+}
+
+/* ========================================
+   Global Reset & Base
+   ======================================== */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.5;
+  overflow: hidden;
+  transition: background var(--transition-smooth), color var(--transition-smooth);
+}
+
+#root {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  text-align: left;
+  border: none;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+input, button, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-primary);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* ========================================
+   Mode Theme Overrides
+   Each mode overrides accent, glow, and
+   interactive element colors.
+   ======================================== */
+
+/* ─── Flux (Purple — default, deepened panels) ─── */
+.misty-theme-flux {
+  --surface-glass: rgba(255, 255, 255, 0.52);
+}
+[data-theme="dark"] .misty-theme-flux {
+  --surface-glass: rgba(26, 26, 48, 0.6);
+}
+
+/* ─── Bee (Amber / Yellow) ─── */
+.misty-theme-bee {
+  --accent: #d97706;
+  --accent-hover: #b45309;
+  --accent-secondary: #fbbf24;
+  --accent-soft: rgba(217, 119, 6, 0.08);
+  --accent-glow: rgba(217, 119, 6, 0.18);
+
+  --surface-hover: rgba(217, 119, 6, 0.06);
+
+  --glow-color-1: rgba(251, 191, 36, 0.15);
+  --glow-color-2: rgba(245, 158, 11, 0.10);
+  --glow-color-3: rgba(234, 179, 8, 0.07);
+
+  --checkbox-checked-bg: #d97706;
+  --input-focus-border: #d97706;
+  --input-focus-glow: rgba(217, 119, 6, 0.15);
+}
+
+[data-theme="dark"] .misty-theme-bee {
+  --accent: #fbbf24;
+  --accent-hover: #f59e0b;
+  --accent-secondary: #f59e0b;
+  --accent-soft: rgba(251, 191, 36, 0.1);
+  --accent-glow: rgba(251, 191, 36, 0.22);
+
+  --surface-hover: rgba(251, 191, 36, 0.08);
+
+  --glow-color-1: rgba(251, 191, 36, 0.20);
+  --glow-color-2: rgba(245, 158, 11, 0.14);
+  --glow-color-3: rgba(234, 179, 8, 0.10);
+
+  --checkbox-checked-bg: #fbbf24;
+  --input-focus-border: #fbbf24;
+  --input-focus-glow: rgba(251, 191, 36, 0.2);
+}
+
+/* ─── Forge (Red-Orange) ─── */
+.misty-theme-forge {
+  --accent: #dc2626;
+  --accent-hover: #b91c1c;
+  --accent-secondary: #f97316;
+  --accent-soft: rgba(220, 38, 38, 0.08);
+  --accent-glow: rgba(220, 38, 38, 0.18);
+
+  --surface-hover: rgba(220, 38, 38, 0.06);
+
+  --glow-color-1: rgba(239, 68, 68, 0.14);
+  --glow-color-2: rgba(249, 115, 22, 0.10);
+  --glow-color-3: rgba(234, 88, 12, 0.07);
+
+  --checkbox-checked-bg: #dc2626;
+  --input-focus-border: #dc2626;
+  --input-focus-glow: rgba(220, 38, 38, 0.15);
+}
+
+[data-theme="dark"] .misty-theme-forge {
+  --accent: #f87171;
+  --accent-hover: #ef4444;
+  --accent-secondary: #fb923c;
+  --accent-soft: rgba(248, 113, 113, 0.1);
+  --accent-glow: rgba(248, 113, 113, 0.22);
+
+  --surface-hover: rgba(248, 113, 113, 0.08);
+
+  --glow-color-1: rgba(248, 113, 113, 0.20);
+  --glow-color-2: rgba(251, 146, 60, 0.14);
+  --glow-color-3: rgba(234, 88, 12, 0.10);
+
+  --checkbox-checked-bg: #f87171;
+  --input-focus-border: #f87171;
+  --input-focus-glow: rgba(248, 113, 113, 0.2);
+}
