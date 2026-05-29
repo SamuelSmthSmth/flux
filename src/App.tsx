@@ -12,6 +12,7 @@ interface MetadataIndex {
   boards: string[];
   years: string[];
   topics: Record<string, string[]>;
+  activeFilters?: Record<string, Record<string, string[]>>;
 }
 
 function useMetadataIndex() {
@@ -324,7 +325,7 @@ function App() {
   // --- Firestore metadata-driven filter state ---
   const { metadata, loading: metadataLoading, error: metadataError } = useMetadataIndex();
   const [selectedDbTopic, setSelectedDbTopic] = useState("");
-  const [selectedDbSubtopic, setSelectedDbSubtopic] = useState<string | null>(null);
+  const [selectedDbSubtopics, setSelectedDbSubtopics] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
   // --- Dynamic Firestore Questions list, loader, and error states ---
@@ -332,10 +333,10 @@ function App() {
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [queryError, setQueryError] = useState<string | null>(null);
 
-  // Reset subtopic when topic changes
+  // Reset subtopics when topic or board changes
   useEffect(() => {
-    setSelectedDbSubtopic(null);
-  }, [selectedDbTopic]);
+    setSelectedDbSubtopics([]);
+  }, [selectedDbTopic, examBoard]);
 
 
   // Derive available boards from metadata (with fallback)
@@ -359,11 +360,18 @@ function App() {
   // Filter topics & subtopics by the search query
   const filteredTopics = useMemo(() => {
     if (!metadata) return {} as Record<string, string[]>;
+    
+    let boardFilters = metadata.topics;
+    if (metadata.activeFilters) {
+      boardFilters = metadata.activeFilters[examBoard];
+      if (!boardFilters) return {}; // Board has no questions
+    }
+
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return metadata.topics;
+    if (!q) return boardFilters;
 
     const result: Record<string, string[]> = {};
-    for (const [topic, subtopics] of Object.entries(metadata.topics)) {
+    for (const [topic, subtopics] of Object.entries(boardFilters)) {
       const topicMatches = topic.toLowerCase().includes(q);
       const matchingSubtopics = subtopics.filter((st) => {
         const displayName = st === "" ? "general" : st.toLowerCase();
@@ -378,7 +386,19 @@ function App() {
       }
     }
     return result;
-  }, [metadata, searchQuery]);
+  }, [metadata, searchQuery, examBoard]);
+
+  const handleSubtopicToggle = (subtopic: string) => {
+    if (activeMode === "Flux") {
+      setSelectedDbSubtopics([subtopic]);
+    } else if (activeMode === "Forge") {
+      setSelectedDbSubtopics((prev) =>
+        prev.includes(subtopic)
+          ? prev.filter((st) => st !== subtopic)
+          : [...prev, subtopic]
+      );
+    }
+  };
 
   // --- Right panel: Bee-specific ---
   const [beeTimeLimit, setBeeTimeLimit] = useState(3);
@@ -471,8 +491,12 @@ function App() {
       qConstraints.push(where("topic", "==", selectedDbTopic));
       qConstraints.push(where("difficulty", "==", difficulty));
       
-      if (selectedDbSubtopic !== null) {
-        qConstraints.push(where("subtopic", "==", selectedDbSubtopic));
+      if (selectedDbSubtopics.length > 0) {
+        if (selectedDbSubtopics.length === 1) {
+          qConstraints.push(where("subtopic", "==", selectedDbSubtopics[0]));
+        } else {
+          qConstraints.push(where("subtopic", "in", selectedDbSubtopics));
+        }
       }
 
       const q = query(
@@ -635,10 +659,16 @@ function App() {
 
                 {/* Topic Browser */}
                 <div className="topic-browser">
-                  {Object.keys(filteredTopics).sort().length === 0 ? (
-                    <div className="topic-no-results">
-                      No topics or subtopics match "<strong>{searchQuery}</strong>".
-                    </div>
+                  {Object.keys(filteredTopics).length === 0 ? (
+                    searchQuery ? (
+                      <div className="topic-no-results">
+                        No topics or subtopics match "<strong>{searchQuery}</strong>".
+                      </div>
+                    ) : (
+                      <div className="topic-no-results">
+                        No questions available for this board yet.
+                      </div>
+                    )
                   ) : (
                     Object.keys(filteredTopics).sort().map((topic) => {
                       const subtopics = filteredTopics[topic];
@@ -682,17 +712,23 @@ function App() {
                           {isExpanded && subtopics.length > 0 && (
                             <div className="topic-group-subtopics">
                               {subtopics.map((st, i) => {
-                                const isSelected = selectedDbSubtopic === st;
+                                const isSelected = selectedDbSubtopics.includes(st);
                                 const displayName = st === "" ? "General" : st;
                                 return (
                                   <div
                                     key={`${st}-${i}`}
                                     className={`nested-subtopic-item${isSelected ? " selected" : ""}`}
-                                    onClick={() => setSelectedDbSubtopic(st)}
+                                    onClick={() => handleSubtopicToggle(st)}
                                   >
-                                    <div className="radio-circle">
-                                      <div className="radio-dot" />
-                                    </div>
+                                    {activeMode === "Forge" ? (
+                                      <div className={`checkbox-square ${isSelected ? "checked" : ""}`}>
+                                        <div className="checkbox-check" />
+                                      </div>
+                                    ) : (
+                                      <div className="radio-circle">
+                                        <div className="radio-dot" />
+                                      </div>
+                                    )}
                                     <span className="nested-subtopic-name">{highlightText(displayName)}</span>
                                   </div>
                                 );
@@ -870,7 +906,7 @@ function App() {
                       : "Generated Questions"}
                   </h2>
                   <p className="paper-viewer-meta">
-                    {questionsList.length} {questionsList.length === 1 ? "question" : "questions"} • {subject} • {examBoard} • {selectedDbTopic || "All Topics"}{selectedDbSubtopic !== null ? ` (${selectedDbSubtopic === "" ? "General" : selectedDbSubtopic})` : ""} • {difficulty}
+                    {questionsList.length} {questionsList.length === 1 ? "question" : "questions"} • {subject} • {examBoard} • {selectedDbTopic || "All Topics"}{selectedDbSubtopics.length > 0 ? ` (${selectedDbSubtopics.map(st => st === "" ? "General" : st).join(", ")})` : ""} • {difficulty}
                   </p>
                 </div>
                 <button
