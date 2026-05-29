@@ -78,6 +78,10 @@ const STANDARD_BOARDS = new Set([
   "ESAT"
 ]);
 
+// Boards classified as physics-only or shared with physics
+const PHYSICS_ONLY_BOARDS = new Set(["PAT", "ESAT"]);
+const SHARED_BOARDS = new Set(["Edexcel", "AQA", "OCR"]);
+
 // ─── Dummy Data ───────────────────────────────────────────────
 
 const DUMMY_QUESTIONS = [
@@ -334,10 +338,19 @@ function App() {
   // Derive available boards from metadata (with fallback)
   const availableBoards = metadata?.boards ?? [...EXAM_BOARDS_FALLBACK];
 
-  // Filter boards by the current difficulty selection
-  const filteredBoards = availableBoards.filter((b) =>
-    difficulty === "Advanced" ? !STANDARD_BOARDS.has(b) : STANDARD_BOARDS.has(b)
-  );
+  // Filter boards by the current difficulty and subject selection
+  const filteredBoards = availableBoards.filter((b) => {
+    const matchesDifficulty = difficulty === "Advanced"
+      ? !STANDARD_BOARDS.has(b)
+      : STANDARD_BOARDS.has(b);
+    if (!matchesDifficulty) return false;
+
+    if (subject === "Physics") {
+      return PHYSICS_ONLY_BOARDS.has(b) || SHARED_BOARDS.has(b);
+    } else {
+      return !PHYSICS_ONLY_BOARDS.has(b);
+    }
+  });
 
   // Derive available topics from metadata
   const availableDbTopics = metadata ? Object.keys(metadata.topics).sort() : [];
@@ -387,15 +400,24 @@ function App() {
 
 
 
-  // --- Cascading Logic: difficulty drives which boards are shown ---
+  // --- Cascading Logic: difficulty & subject drive which boards are shown ---
   useEffect(() => {
-    const boards = availableBoards.filter((b) =>
-      difficulty === "Advanced" ? !STANDARD_BOARDS.has(b) : STANDARD_BOARDS.has(b)
-    );
+    const boards = availableBoards.filter((b) => {
+      const matchesDifficulty = difficulty === "Advanced"
+        ? !STANDARD_BOARDS.has(b)
+        : STANDARD_BOARDS.has(b);
+      if (!matchesDifficulty) return false;
+
+      if (subject === "Physics") {
+        return PHYSICS_ONLY_BOARDS.has(b) || SHARED_BOARDS.has(b);
+      } else {
+        return !PHYSICS_ONLY_BOARDS.has(b);
+      }
+    });
     if (boards.length > 0 && !boards.includes(examBoard)) {
       setExamBoard(boards[0]);
     }
-  }, [difficulty, availableBoards]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [difficulty, subject, availableBoards]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Action handlers ---
   const handleStartBee = () => {
