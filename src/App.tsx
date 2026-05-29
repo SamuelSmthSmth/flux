@@ -65,6 +65,12 @@ const EXAM_BOARDS_FALLBACK = [
   "AEA",
 ] as const;
 
+// Boards classified as "Standard" (e.g. Edexcel, AQA, OCR, MEI).
+// Everything not in this set is treated as an advanced / competition board.
+const STANDARD_BOARDS = new Set([
+  "Edexcel", "AQA", "OCR", "MEI",
+]);
+
 // ─── Dummy Data ───────────────────────────────────────────────
 
 const DUMMY_QUESTIONS = [
@@ -321,6 +327,11 @@ function App() {
   // Derive available boards from metadata (with fallback)
   const availableBoards = metadata?.boards ?? [...EXAM_BOARDS_FALLBACK];
 
+  // Filter boards by the current difficulty selection
+  const filteredBoards = availableBoards.filter((b) =>
+    difficulty === "Advanced" ? !STANDARD_BOARDS.has(b) : STANDARD_BOARDS.has(b)
+  );
+
   // Derive available topics from metadata
   const availableDbTopics = metadata ? Object.keys(metadata.topics).sort() : [];
 
@@ -369,11 +380,15 @@ function App() {
 
 
 
-  // --- Cascading Logic ---
-  const isStandardBoard = ["Edexcel", "AQA", "OCR"].includes(examBoard);
+  // --- Cascading Logic: difficulty drives which boards are shown ---
   useEffect(() => {
-    setDifficulty(isStandardBoard ? "Standard" : "Advanced");
-  }, [examBoard, isStandardBoard]);
+    const boards = availableBoards.filter((b) =>
+      difficulty === "Advanced" ? !STANDARD_BOARDS.has(b) : STANDARD_BOARDS.has(b)
+    );
+    if (boards.length > 0 && !boards.includes(examBoard)) {
+      setExamBoard(boards[0]);
+    }
+  }, [difficulty, availableBoards]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Action handlers ---
   const handleStartBee = () => {
@@ -806,6 +821,17 @@ function App() {
                   </div>
                 </div>
 
+                <div className="panel-section">
+                  <div className="setting-group">
+                    <span className="setting-label">Difficulty</span>
+                    <PillToggle
+                      options={["Standard", "Advanced"]}
+                      value={difficulty}
+                      onChange={setDifficulty}
+                    />
+                  </div>
+                </div>
+
                 {metadataLoading ? (
                   <div className="panel-section">
                     <div className="setting-group">
@@ -829,7 +855,7 @@ function App() {
                     <div className="setting-group">
                       <span className="setting-label">Exam Board / Paper Type</span>
                       <div className="subtopic-radio-list">
-                        {availableBoards.map((b) => {
+                        {filteredBoards.map((b) => {
                           const isSelected = examBoard === b;
                           return (
                             <div
@@ -848,17 +874,6 @@ function App() {
                     </div>
                   </div>
                 )}
-
-                <div className="panel-section">
-                  <div className="setting-group">
-                    <span className="setting-label">Difficulty</span>
-                    <PillToggle
-                      options={["Standard", "Advanced"]}
-                      value={difficulty}
-                      onChange={setDifficulty}
-                    />
-                  </div>
-                </div>
               </>
             )}
 
@@ -915,6 +930,17 @@ function App() {
 
                 <div className="panel-section">
                   <div className="setting-group">
+                    <span className="setting-label">Difficulty</span>
+                    <PillToggle
+                      options={["Standard", "Advanced"]}
+                      value={difficulty}
+                      onChange={setDifficulty}
+                    />
+                  </div>
+                </div>
+
+                <div className="panel-section">
+                  <div className="setting-group">
                     <span className="setting-label">Exam Board / Paper Type</span>
                     {metadataLoading ? (
                       <div className="skeleton-list">
@@ -924,7 +950,7 @@ function App() {
                       </div>
                     ) : (
                       <div className="subtopic-radio-list">
-                        {availableBoards.map((b) => {
+                        {filteredBoards.map((b) => {
                           const isSelected = examBoard === b;
                           return (
                             <div
