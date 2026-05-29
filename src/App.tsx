@@ -9,9 +9,8 @@ import "./App.css";
 
 // ─── Firestore Metadata Index ─────────────────────────────────
 interface MetadataIndex {
-  boards: string[];
-  years: string[];
-  topics: Record<string, string[]>;
+  boards: Record<string, string[]>;
+  topics: Record<string, Record<string, string[]>>;
 }
 
 function useMetadataIndex() {
@@ -53,17 +52,11 @@ type ActiveState = "setup" | "playing-bee" | "viewing-paper" | "generating-pdf";
 
 
 
-// EXAM_BOARDS is now loaded dynamically from Firestore metadata_index.
-// Kept as a fallback if the database fetch fails.
-const EXAM_BOARDS_FALLBACK = [
-  "Edexcel",
-  "AQA",
-  "OCR",
-  "MEI",
-  "TMUA",
-  "STEP",
-  "AEA",
-] as const;
+// Standard curriculum boards — anything not in this set is treated as "advanced"
+const STANDARD_BOARDS = new Set(["Edexcel", "AQA", "OCR", "MEI"]);
+
+// Fallback subjects if metadata hasn't loaded yet
+const SUBJECTS_FALLBACK = ["Physics", "Mathematics", "Further Maths", "Putnam"] as const;
 
 // ─── Dummy Data ───────────────────────────────────────────────
 
@@ -308,21 +301,38 @@ function App() {
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [queryError, setQueryError] = useState<string | null>(null);
 
+  // --- Derive available subjects from metadata ---
+  const availableSubjects = metadata
+    ? Object.keys(metadata.boards)
+    : [...SUBJECTS_FALLBACK];
+
+  // --- Derive boards filtered by selected subject ---
+  const availableBoards = metadata?.boards[subject] ?? [];
+
+  // --- Derive topics filtered by selected subject ---
+  const availableDbTopics = metadata
+    ? Object.keys(metadata.topics[subject] ?? {}).sort()
+    : [];
+
+  // --- Derive subtopics filtered by selected subject + topic ---
+  const availableSubtopics = metadata && selectedDbTopic
+    ? (metadata.topics[subject]?.[selectedDbTopic] ?? [])
+    : [];
+
+  // --- Cascading resets: subject change resets board, topic, subtopic ---
+  useEffect(() => {
+    setSelectedDbTopic("");
+    setSelectedDbSubtopic(null);
+    // Auto-select first available board for the new subject
+    if (metadata?.boards[subject]?.length) {
+      setExamBoard(metadata.boards[subject][0]);
+    }
+  }, [subject, metadata]);
+
   // Reset subtopic when topic changes
   useEffect(() => {
     setSelectedDbSubtopic(null);
   }, [selectedDbTopic]);
-
-  // Derive available subtopics from metadata
-  const availableSubtopics = metadata && selectedDbTopic
-    ? (metadata.topics[selectedDbTopic] ?? [])
-    : [];
-
-  // Derive available boards from metadata (with fallback)
-  const availableBoards = metadata?.boards ?? [...EXAM_BOARDS_FALLBACK];
-
-  // Derive available topics from metadata
-  const availableDbTopics = metadata ? Object.keys(metadata.topics).sort() : [];
 
   // --- Right panel: Bee-specific ---
   const [beeTimeLimit, setBeeTimeLimit] = useState(3);
@@ -370,7 +380,8 @@ function App() {
 
 
   // --- Cascading Logic ---
-  const isAdvancedBoard = ["TMUA", "STEP", "AEA"].includes(examBoard);
+  // Any board not in the standard set is treated as advanced (entrance exams, competitions)
+  const isAdvancedBoard = !STANDARD_BOARDS.has(examBoard);
   useEffect(() => {
     if (isAdvancedBoard) {
       setDifficulty("Advanced");
@@ -801,7 +812,7 @@ function App() {
                   <div className="setting-group">
                     <span className="setting-label">Subject</span>
                     <PillToggle
-                      options={["Physics", "Mathematics", "Further Maths"]}
+                      options={availableSubjects}
                       value={subject}
                       onChange={setSubject}
                     />
@@ -908,7 +919,7 @@ function App() {
                   <div className="setting-group">
                     <span className="setting-label">Subject</span>
                     <PillToggle
-                      options={["Physics", "Mathematics", "Further Maths"]}
+                      options={availableSubjects}
                       value={subject}
                       onChange={setSubject}
                     />
