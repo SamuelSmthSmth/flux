@@ -370,12 +370,10 @@ function App() {
 
 
   // --- Cascading Logic ---
-  const isAdvancedBoard = ["TMUA", "STEP", "AEA"].includes(examBoard);
+  const isStandardBoard = ["Edexcel", "AQA", "OCR"].includes(examBoard);
   useEffect(() => {
-    if (isAdvancedBoard) {
-      setDifficulty("Advanced");
-    }
-  }, [examBoard, isAdvancedBoard]);
+    setDifficulty(isStandardBoard ? "Standard" : "Advanced");
+  }, [examBoard, isStandardBoard]);
 
   // --- Action handlers ---
   const handleStartBee = () => {
