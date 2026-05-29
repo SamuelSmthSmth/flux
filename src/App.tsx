@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { doc, getDoc, collection, query, where, limit, getDocs } from "firebase/firestore";
 import { db } from "./firebase";
 import ReactMarkdown from "react-markdown";
@@ -318,6 +318,7 @@ function App() {
   const { metadata, loading: metadataLoading, error: metadataError } = useMetadataIndex();
   const [selectedDbTopic, setSelectedDbTopic] = useState("");
   const [selectedDbSubtopic, setSelectedDbSubtopic] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // --- Dynamic Firestore Questions list, loader, and error states ---
   const [questionsList, setQuestionsList] = useState<any[]>([]);
@@ -329,10 +330,6 @@ function App() {
     setSelectedDbSubtopic(null);
   }, [selectedDbTopic]);
 
-  // Derive available subtopics from metadata
-  const availableSubtopics = metadata && selectedDbTopic
-    ? (metadata.topics[selectedDbTopic] ?? [])
-    : [];
 
   // Derive available boards from metadata (with fallback)
   const availableBoards = metadata?.boards ?? [...EXAM_BOARDS_FALLBACK];
@@ -351,8 +348,30 @@ function App() {
     }
   });
 
-  // Derive available topics from metadata
-  const availableDbTopics = metadata ? Object.keys(metadata.topics).sort() : [];
+
+  // Filter topics & subtopics by the search query
+  const filteredTopics = useMemo(() => {
+    if (!metadata) return {} as Record<string, string[]>;
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return metadata.topics;
+
+    const result: Record<string, string[]> = {};
+    for (const [topic, subtopics] of Object.entries(metadata.topics)) {
+      const topicMatches = topic.toLowerCase().includes(q);
+      const matchingSubtopics = subtopics.filter((st) => {
+        const displayName = st === "" ? "general" : st.toLowerCase();
+        return displayName.includes(q);
+      });
+      if (topicMatches) {
+        // Topic name matches — include it with all its subtopics
+        result[topic] = subtopics;
+      } else if (matchingSubtopics.length > 0) {
+        // Subtopic(s) match — include parent topic with only matching subtopics
+        result[topic] = matchingSubtopics;
+      }
+    }
+    return result;
+  }, [metadata, searchQuery]);
 
   // --- Right panel: Bee-specific ---
   const [beeTimeLimit, setBeeTimeLimit] = useState(3);
@@ -583,49 +602,99 @@ function App() {
               </div>
             ) : (
               <>
-                <div className="panel-section">
-                  <div className="setting-group">
-                    <span className="setting-label">Topic</span>
-                    <select
-                      className="select-input"
-                      value={selectedDbTopic}
-                      onChange={(e) => setSelectedDbTopic(e.target.value)}
-                    >
-                      <option value="">Select a topic…</option>
-                      {availableDbTopics.map((t) => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
+                {/* Search Input */}
+                <div className="topic-search-container">
+                  <div className="topic-search-wrapper">
+                    <input
+                      className="topic-search-input"
+                      type="text"
+                      placeholder="Search topics or subtopics…"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                    <span className="topic-search-icon">🔍</span>
+                    {searchQuery && (
+                      <button
+                        className="topic-search-clear"
+                        onClick={() => setSearchQuery("")}
+                        type="button"
+                        aria-label="Clear search"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                <div className="panel-section flex-grow">
-                  <div className="panel-section-title">
-                    <span>Subtopics</span>
-                  </div>
-                  {!selectedDbTopic ? (
-                    <div className="subtopic-placeholder">
-                      Select a topic to view subtopics.
+                {/* Topic Browser */}
+                <div className="topic-browser">
+                  {Object.keys(filteredTopics).sort().length === 0 ? (
+                    <div className="topic-no-results">
+                      No topics or subtopics match "<strong>{searchQuery}</strong>".
                     </div>
                   ) : (
-                    <div className="subtopic-radio-list">
-                      {availableSubtopics.map((st, i) => {
-                        const isSelected = selectedDbSubtopic === st;
-                        const displayName = st === "" ? "General" : st;
+                    Object.keys(filteredTopics).sort().map((topic) => {
+                      const subtopics = filteredTopics[topic];
+                      const isActive = selectedDbTopic === topic;
+                      const isExpanded = isActive;
+                      const q = searchQuery.trim().toLowerCase();
+
+                      const highlightText = (text: string) => {
+                        if (!q) return text;
+                        const idx = text.toLowerCase().indexOf(q);
+                        if (idx === -1) return text;
                         return (
-                          <div
-                            key={`${st}-${i}`}
-                            className={`subtopic-radio-item ${isSelected ? "selected" : ""}`}
-                            onClick={() => setSelectedDbSubtopic(st)}
-                          >
-                            <div className="radio-circle">
-                              <div className="radio-dot" />
-                            </div>
-                            <span className="subtopic-radio-label">{displayName}</span>
-                          </div>
+                          <>
+                            {text.slice(0, idx)}
+                            <span className="search-highlight">{text.slice(idx, idx + q.length)}</span>
+                            {text.slice(idx + q.length)}
+                          </>
                         );
-                      })}
-                    </div>
+                      };
+
+                      return (
+                        <div
+                          key={topic}
+                          className={`topic-group${isExpanded ? " expanded" : ""}`}
+                        >
+                          <div
+                            className={`topic-group-header${isActive ? " active" : ""}`}
+                            onClick={() => {
+                              if (selectedDbTopic === topic) {
+                                setSelectedDbTopic("");
+                              } else {
+                                setSelectedDbTopic(topic);
+                              }
+                            }}
+                          >
+                            <span className="topic-group-chevron">▶</span>
+                            <span className="topic-group-name">{highlightText(topic)}</span>
+                            <span className="topic-group-count">{subtopics.length}</span>
+                          </div>
+
+                          {isExpanded && subtopics.length > 0 && (
+                            <div className="topic-group-subtopics">
+                              {subtopics.map((st, i) => {
+                                const isSelected = selectedDbSubtopic === st;
+                                const displayName = st === "" ? "General" : st;
+                                return (
+                                  <div
+                                    key={`${st}-${i}`}
+                                    className={`nested-subtopic-item${isSelected ? " selected" : ""}`}
+                                    onClick={() => setSelectedDbSubtopic(st)}
+                                  >
+                                    <div className="radio-circle">
+                                      <div className="radio-dot" />
+                                    </div>
+                                    <span className="nested-subtopic-name">{highlightText(displayName)}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               </>
