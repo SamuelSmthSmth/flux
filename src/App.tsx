@@ -68,7 +68,14 @@ const EXAM_BOARDS_FALLBACK = [
 // Boards classified as "Standard" (e.g. Edexcel, AQA, OCR, MEI).
 // Everything not in this set is treated as an advanced / competition board.
 const STANDARD_BOARDS = new Set([
-  "Edexcel", "AQA", "OCR", "MEI",
+  "Edexcel", 
+  "AQA", 
+  "OCR", 
+  "TMUA", 
+  "MAT", 
+  "AEA",
+  "PAT",
+  "ESAT"
 ]);
 
 // ─── Dummy Data ───────────────────────────────────────────────
