@@ -73,7 +73,6 @@ const STANDARD_BOARDS = new Set([
   "OCR", 
   "TMUA", 
   "MAT", 
-  "AEA",
   "PAT",
   "ESAT"
 ]);
