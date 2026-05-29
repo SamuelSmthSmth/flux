@@ -179,6 +179,13 @@ function MiniToggle({
   );
 }
 
+/** Helper to ensure block math renders correctly by adding newlines */
+const formatMathText = (text: string) => {
+  if (!text) return "";
+  // Ensure $$ are surrounded by newlines, handling both start and end
+  return text.replace(/\$\$(.*?)\$\$/gs, (_, p1) => `\n$$\n${p1.trim()}\n$$\n`);
+};
+
 /** Expandable reveal section for mark schemes / examiner notes */
 function ExpandableSection({
   title,
@@ -222,7 +229,7 @@ function ExpandableSection({
             remarkPlugins={[remarkMath]}
             rehypePlugins={[rehypeKatex]}
           >
-            {content}
+            {formatMathText(content)}
           </ReactMarkdown>
         </div>
       </div>
@@ -264,7 +271,7 @@ function QuestionCard({
           remarkPlugins={[remarkMath]}
           rehypePlugins={[rehypeKatex]}
         >
-          {problemText}
+          {formatMathText(problemText)}
         </ReactMarkdown>
       </div>
       {showExpandables && (
