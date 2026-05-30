@@ -539,6 +539,81 @@
   }
 }
 
+/* ========================================
+   MOBILE & TABLET OPTIMIZATIONS
+   Disables heavy blurs, gradients, and transforms to prevent lag spikes
+   ======================================== */
+@media (max-width: 1024px) {
+  /* Intro Splash - Simple fade out */
+  .misty-intro-mist {
+    display: none;
+  }
+  .misty-intro-logo {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: scale(1) !important;
+    filter: none !important;
+  }
+  .misty-intro-letter {
+    animation: none !important;
+  }
+
+  /* Mode Viewport - Simple opacity/scale */
+  .mode-viewport.mode-phase-out {
+    animation: mode-view-exit-mobile 0.5s ease forwards !important;
+  }
+  .mode-viewport.mode-phase-in {
+    animation: mode-view-enter-mobile 0.5s ease forwards !important;
+  }
+  .mode-viewport::after {
+    display: none !important;
+  }
+
+  /* Mode Transition Overlay - Solid color, no blur/wave */
+  .mode-transition {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: var(--bg-primary) !important;
+  }
+  .mode-transition-mist {
+    display: none !important;
+  }
+  .mode-transition-out .mode-transition-title,
+  .mode-transition-in .mode-transition-title,
+  .mode-transition-out .mode-transition-notation,
+  .mode-transition-in .mode-transition-notation {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+  .mode-transition-out .mode-transition-glyph,
+  .mode-transition-in .mode-transition-glyph {
+    animation: none !important;
+    opacity: 0.09 !important;
+    transform: translateY(-8%) !important;
+    filter: none !important;
+  }
+  .mode-transition-letter {
+    animation: none !important;
+  }
+
+  /* Ambient Background Glow */
+  .glow-orb {
+    animation: none !important;
+  }
+}
+
+@keyframes mode-view-exit-mobile {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.98); }
+}
+
+@keyframes mode-view-enter-mobile {
+  from { opacity: 0; transform: scale(1.02); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 /* ---- Background Glow ---- */
 .misty-app {
   position: relative;
