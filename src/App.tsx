@@ -787,10 +787,9 @@ function App() {
             <>
               {activeMode === "Flux" && (
                 <div className="center-content" key="flux-setup">
-                  <h2 className="center-title">Ready to Generate</h2>
+                  <h2 className="center-title">Hyper-Precise Question Finder</h2>
                   <p className="center-subtitle">
-                    Select your topics on the left, configure filters on the
-                    right, then hit generate to create your custom practice set.
+                    Instantly find individual questions from real A-Level past papers, precisely indexed by topic and sub-topic. Select your parameters on the left and filters on the right to grab exactly the practice you need.
                   </p>
                   <button
                     className="btn-primary"
@@ -801,11 +800,11 @@ function App() {
                     {loadingQuestions ? (
                       <>
                         <span className="btn-spinner" />
-                        Generating...
+                        Finding...
                       </>
                     ) : (
                       <>
-                        <span>✦</span> Generate Questions
+                        <span>✦</span> Find Questions
                       </>
                     )}
                   </button>
