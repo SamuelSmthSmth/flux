@@ -52,6 +52,7 @@ function useMetadataIndex() {
 type Mode = "Flux" | "Bee" | "Forge";
 type Theme = "light" | "dark";
 type ActiveState = "setup" | "playing-bee" | "viewing-paper" | "generating-pdf";
+type WorkspaceTab = "none" | "mark_scheme" | "examiner_report";
 
 
 
@@ -243,9 +244,13 @@ function ExpandableSection({
 function QuestionCard({
   question,
   showExpandables,
+  onActivateWorkspace,
+  activeWorkspace,
 }: {
   question: any;
   showExpandables: boolean;
+  onActivateWorkspace?: (tab: WorkspaceTab, id: string) => void;
+  activeWorkspace?: WorkspaceTab;
 }) {
   const [showMarkScheme, setShowMarkScheme] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
@@ -278,23 +283,48 @@ function QuestionCard({
       </div>
       {showExpandables && (
         <div className="question-card-expandables">
-          {markSchemeText && (
-            <ExpandableSection
-              title="Mark Scheme"
-              icon="📋"
-              content={markSchemeText}
-              isOpen={showMarkScheme}
-              onToggle={() => setShowMarkScheme((v) => !v)}
-            />
-          )}
-          {examinerReportText && (
-            <ExpandableSection
-              title="Examiner Notes"
-              icon="📝"
-              content={examinerReportText}
-              isOpen={showNotes}
-              onToggle={() => setShowNotes((v) => !v)}
-            />
+          {onActivateWorkspace ? (
+            <div className="workspace-triggers">
+              {markSchemeText && (
+                <button
+                  className={`btn-workspace ${activeWorkspace === "mark_scheme" ? "active" : ""}`}
+                  onClick={() => onActivateWorkspace(activeWorkspace === "mark_scheme" ? "none" : "mark_scheme", question.id)}
+                  type="button"
+                >
+                  📋 Mark Scheme
+                </button>
+              )}
+              {examinerReportText && (
+                <button
+                  className={`btn-workspace ${activeWorkspace === "examiner_report" ? "active" : ""}`}
+                  onClick={() => onActivateWorkspace(activeWorkspace === "examiner_report" ? "none" : "examiner_report", question.id)}
+                  type="button"
+                >
+                  📝 Examiner Report
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              {markSchemeText && (
+                <ExpandableSection
+                  title="Mark Scheme"
+                  icon="📋"
+                  content={markSchemeText}
+                  isOpen={showMarkScheme}
+                  onToggle={() => setShowMarkScheme((v) => !v)}
+                />
+              )}
+              {examinerReportText && (
+                <ExpandableSection
+                  title="Examiner Notes"
+                  icon="📝"
+                  content={examinerReportText}
+                  isOpen={showNotes}
+                  onToggle={() => setShowNotes((v) => !v)}
+                />
+              )}
+            </>
           )}
         </div>
       )}
@@ -315,6 +345,10 @@ function App() {
   });
   const [activeMode, setActiveMode] = useState<Mode>("Flux");
   const [activeState, setActiveState] = useState<ActiveState>("setup");
+  
+  // --- Workspace State ---
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("none");
+  const [activeQuestionId, setActiveQuestionId] = useState<string | null>(null);
 
 
 
@@ -898,47 +932,107 @@ function App() {
 
           {/* ═══ PAPER VIEWER STATE (Flux + Forge) ═══ */}
           {activeState === "viewing-paper" && (
-            <div className="paper-viewer" key="paper-view">
-              <div className="paper-viewer-header">
-                <div>
-                  <h2 className="paper-viewer-title">
-                    {activeMode === "Forge"
-                      ? "Forged Paper"
-                      : "Generated Questions"}
-                  </h2>
-                  <p className="paper-viewer-meta">
-                    {questionsList.length} {questionsList.length === 1 ? "question" : "questions"} • {subject} • {examBoard} • {selectedDbTopic || "All Topics"}{selectedDbSubtopics.length > 0 ? ` (${selectedDbSubtopics.map(st => st === "" ? "General" : st).join(", ")})` : ""} • {difficulty}
-                  </p>
-                </div>
-                <button
-                  className="btn-ghost"
-                  type="button"
-                  onClick={handleExitActive}
-                >
-                  ← Back to Setup
-                </button>
-              </div>
-
-              <div className="paper-viewer-questions">
-                {questionsList.length === 0 ? (
-                  <div className="no-questions-found">
-                    <div className="no-questions-icon">🔍</div>
-                    <h3>No Questions Found</h3>
-                    <p>
-                      We couldn't find any questions matching your current configuration. Try selecting a different topic, subtopic, or exam board.
+            <div className={`twin-pane-container ${activeWorkspaceTab !== "none" ? "split-active" : ""}`} key="paper-view">
+              <div className="twin-pane-left">
+                <div className="paper-viewer-header">
+                  <div>
+                    <h2 className="paper-viewer-title">
+                      {activeMode === "Forge"
+                        ? "Forged Paper"
+                        : "Generated Questions"}
+                    </h2>
+                    <p className="paper-viewer-meta">
+                      {questionsList.length} {questionsList.length === 1 ? "question" : "questions"} • {subject} • {examBoard} • {selectedDbTopic || "All Topics"}{selectedDbSubtopics.length > 0 ? ` (${selectedDbSubtopics.map(st => st === "" ? "General" : st).join(", ")})` : ""} • {difficulty}
                     </p>
                   </div>
-                ) : (
-                  questionsList.map((q, i) => (
-                    <div className="paper-question-wrapper" key={q.id}>
-                      <span className="paper-question-number">
-                        Question {i + 1}
-                      </span>
-                      <QuestionCard question={q} showExpandables={true} />
+                  <button
+                    className="btn-ghost"
+                    type="button"
+                    onClick={handleExitActive}
+                  >
+                    ← Back to Setup
+                  </button>
+                </div>
+
+                <div className="paper-viewer-questions">
+                  {questionsList.length === 0 ? (
+                    <div className="no-questions-found">
+                      <div className="no-questions-icon">🔍</div>
+                      <h3>No Questions Found</h3>
+                      <p>
+                        We couldn't find any questions matching your current configuration. Try selecting a different topic, subtopic, or exam board.
+                      </p>
                     </div>
-                  ))
-                )}
+                  ) : (
+                    questionsList.map((q, i) => (
+                      <div className="paper-question-wrapper" key={q.id}>
+                        <span className="paper-question-number">
+                          Question {i + 1}
+                        </span>
+                        <QuestionCard 
+                          question={q} 
+                          showExpandables={true}
+                          onActivateWorkspace={(tab, id) => {
+                            setActiveWorkspaceTab(tab);
+                            setActiveQuestionId(id);
+                          }}
+                          activeWorkspace={activeQuestionId === q.id ? activeWorkspaceTab : "none"}
+                        />
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
+
+              {activeWorkspaceTab !== "none" && activeQuestionId && (
+                <div className="twin-pane-right">
+                  <div className="workspace-tab-bar">
+                    <button 
+                      className={`workspace-tab-btn ${activeWorkspaceTab === "mark_scheme" ? "active" : ""}`}
+                      onClick={() => setActiveWorkspaceTab("mark_scheme")}
+                    >
+                      Mark Scheme
+                    </button>
+                    <button 
+                      className={`workspace-tab-btn ${activeWorkspaceTab === "examiner_report" ? "active" : ""}`}
+                      onClick={() => setActiveWorkspaceTab("examiner_report")}
+                    >
+                      Examiner Report
+                    </button>
+                    <button 
+                      className="workspace-tab-close"
+                      onClick={() => {
+                        setActiveWorkspaceTab("none");
+                        setActiveQuestionId(null);
+                      }}
+                      title="Close Workspace"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="workspace-content">
+                    {(() => {
+                      const q = questionsList.find(q => q.id === activeQuestionId);
+                      if (!q) return <div className="workspace-empty">Question not found.</div>;
+                      
+                      const content = activeWorkspaceTab === "mark_scheme" 
+                        ? (q.mark_scheme_markdown ?? q.markScheme ?? "*No mark scheme available for this question.*")
+                        : (q.examiner_report_markdown ?? q.examinerNotes ?? "*No examiner report available for this question.*");
+                        
+                      return (
+                        <div className="workspace-markdown">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkMath]}
+                            rehypePlugins={[rehypeKatex]}
+                          >
+                            {formatMathText(content)}
+                          </ReactMarkdown>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </main>
