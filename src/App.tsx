@@ -55,7 +55,15 @@ type Theme = "light" | "dark";
 type ActiveState = "setup" | "playing-fields" | "viewing-paper" | "generating-pdf";
 type WorkspaceTab = "none" | "mark_scheme" | "examiner_report";
 
+const MODE_MATH: Record<Mode, { glyph: string; notation: string }> = {
+  Flux: { glyph: "∂", notation: "∂f/∂x" },
+  Fields: { glyph: "∫", notation: "∮ f · dr" },
+  Forge: { glyph: "∑", notation: "∑ᵢ aᵢ" },
+};
 
+const INTRO_DURATION_MS = 1000;
+const MODE_SWITCH_OUT_MS = INTRO_DURATION_MS / 2;
+const MODE_SWITCH_IN_MS = INTRO_DURATION_MS / 2;
 
 // EXAM_BOARDS is now loaded dynamically from Firestore metadata_index.
 // Kept as a fallback if the database fetch fails.
@@ -294,6 +302,9 @@ function App() {
       : "light";
   });
   const [activeMode, setActiveMode] = useState<Mode>("Flux");
+  const [modePhase, setModePhase] = useState<"idle" | "out" | "in">("idle");
+  const [pendingMode, setPendingMode] = useState<Mode | null>(null);
+  const [showIntro, setShowIntro] = useState(true);
   const [activeState, setActiveState] = useState<ActiveState>("setup");
   
   // --- Workspace State ---
@@ -391,6 +402,39 @@ function App() {
     localStorage.setItem("misty-theme", theme);
   }, [theme]);
 
+  // --- Intro splash on each load ---
+  useEffect(() => {
+    if (!showIntro) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion) {
+      setShowIntro(false);
+      return;
+    }
+    const t = window.setTimeout(() => setShowIntro(false), INTRO_DURATION_MS);
+    return () => clearTimeout(t);
+  }, [showIntro]);
+
+  const switchMode = (mode: Mode) => {
+    if (mode === activeMode || modePhase === "out") return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion) {
+      setActiveMode(mode);
+      handleExitActive();
+      return;
+    }
+    setPendingMode(mode);
+    setModePhase("out");
+    window.setTimeout(() => {
+      setActiveMode(mode);
+      handleExitActive();
+      setModePhase("in");
+      window.setTimeout(() => {
+        setModePhase("idle");
+        setPendingMode(null);
+      }, MODE_SWITCH_IN_MS);
+    }, MODE_SWITCH_OUT_MS);
+  };
+
 
 
   // --- Toggle helpers ---
@@ -473,12 +517,15 @@ function App() {
   // --- Hide side panels during active states ---
   const showPanels = activeState === "setup";
 
+  // Theme follows destination mode immediately during switch transitions
+  const themeMode = pendingMode ?? activeMode;
+
   // ───────────────────────────────────────────────────────────────
   // RENDER
   // ───────────────────────────────────────────────────────────────
 
   return (
-    <div className={`misty-app misty-theme-${activeMode.toLowerCase()}`}>
+    <div className={`misty-app misty-theme-${themeMode.toLowerCase()}`}>
       {/* Ambient background glow */}
       <div className="background-glow" aria-hidden="true">
         <div className="glow-orb glow-orb-1" />
@@ -499,11 +546,8 @@ function App() {
           {(["Flux", "Fields", "Forge"] as Mode[]).map((mode) => (
             <button
               key={mode}
-              className={`mode-btn ${activeMode === mode ? "active" : ""}`}
-              onClick={() => {
-                setActiveMode(mode);
-                handleExitActive();
-              }}
+              className={`mode-btn ${themeMode === mode ? "active" : ""}`}
+              onClick={() => switchMode(mode)}
               type="button"
             >
               {mode}
@@ -525,7 +569,9 @@ function App() {
       </header>
 
       {/* ─── Main Content Area ─── */}
-      <div className="main-layout h-[calc(100vh-64px)] overflow-hidden">
+      <div
+        className={`main-layout mode-viewport mode-phase-${modePhase} h-[calc(100vh-64px)] overflow-hidden`}
+      >
         {activeMode === "Flux" ? (
           <>
             {/* ── Left Panel ── */}
@@ -910,6 +956,48 @@ function App() {
           />
         )}
       </div>
+
+      {pendingMode && modePhase !== "idle" && (
+        <div
+          className={`mode-transition misty-theme-${pendingMode.toLowerCase()} mode-transition-${modePhase}`}
+          aria-hidden="true"
+        >
+          <div className="mode-transition-mist" />
+          <span className="mode-transition-glyph">{MODE_MATH[pendingMode].glyph}</span>
+          <div className="mode-transition-center">
+            <span className="mode-transition-title">
+              {pendingMode.split("").map((char, i) => (
+                <span
+                  key={`${char}-${i}`}
+                  className="mode-transition-letter"
+                  style={{ ["--letter-i" as string]: i }}
+                >
+                  {char}
+                </span>
+              ))}
+            </span>
+            <span className="mode-transition-notation">{MODE_MATH[pendingMode].notation}</span>
+          </div>
+        </div>
+      )}
+
+      {showIntro && (
+        <div className="misty-intro" aria-hidden="true">
+          <div className="misty-intro-mist" />
+          <span className="misty-intro-logo">
+            {"Misty".split("").map((char, i) => (
+              <span
+                key={`${char}-${i}`}
+                className="misty-intro-letter"
+                style={{ ["--letter-i" as string]: i }}
+              >
+                {char}
+              </span>
+            ))}
+          </span>
+        </div>
+      )}
+
       <Analytics />
     </div>
   );

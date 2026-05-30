@@ -74,89 +74,124 @@ export default function Dashboard({ mode }: DashboardProps) {
     setActiveTab('preflight');
   };
 
+  const heroSelected = selectedItem?.id === activeData.hero.id;
+
+  const heroCard = (variant: 'side' | 'compact' | 'top') => (
+    <div
+      className={`dashboard-hero ${
+        variant === 'side'
+          ? 'dashboard-hero-side'
+          : variant === 'compact'
+            ? 'dashboard-hero-compact'
+            : ''
+      } ${heroSelected ? 'selected' : ''}`}
+      onClick={() => handleSelectItem(activeData.hero)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === 'Enter' && handleSelectItem(activeData.hero)}
+    >
+      <div className="dashboard-hero-glow" aria-hidden="true" />
+      {variant !== 'compact' && (
+        <span className="dashboard-hero-deco" aria-hidden="true">
+          {mode === 'Fields' ? '∫' : '∑'}
+        </span>
+      )}
+      <div className="dashboard-hero-content">
+        <h2 className="dashboard-hero-title">{activeData.hero.title}</h2>
+        {variant !== 'compact' && (
+          <div className="dashboard-hero-tags">
+            <span className="dashboard-tag dashboard-tag-featured">Featured</span>
+            <span className="dashboard-tag dashboard-tag-interactive">Interactive</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const searchBar = (
+    <div className="dashboard-search-bar">
+      <div className="topic-search-wrapper">
+        <input
+          className="topic-search-input"
+          type="text"
+          placeholder={`Search ${mode} for topics, questions, or papers…`}
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        <span className="topic-search-icon">🔍</span>
+        {searchQuery && (
+          <button
+            className="topic-search-clear"
+            onClick={() => setSearchQuery('')}
+            type="button"
+            aria-label="Clear search"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  const carouselSections = (
+    <>
+      {activeData.carousels.map((carousel, idx) => (
+        <section key={idx} className="dashboard-carousel-section">
+          <h3 className="dashboard-carousel-title">{carousel.title}</h3>
+          <div className={`dashboard-carousel-track ${isDetailView ? 'dashboard-carousel-track-vertical' : ''}`}>
+            {carousel.items.map((item) => (
+              <div
+                key={item.id}
+                className={`dashboard-card ${isDetailView ? 'dashboard-card-compact' : ''} ${selectedItem?.id === item.id ? 'selected' : ''}`}
+                onClick={() => handleSelectItem(item)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && handleSelectItem(item)}
+              >
+                <div className="dashboard-card-inner">
+                  <h4 className="dashboard-card-title">{item.title}</h4>
+                  <span className={`dashboard-card-badge dashboard-card-badge-${item.difficulty.toLowerCase()}`}>
+                    {item.difficulty}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+    </>
+  );
+
   return (
     <div className={`dashboard ${isDetailView ? 'dashboard-split' : ''}`}>
       {/* Master / Sidebar pane */}
-      <div className={`dashboard-master ${isDetailView ? 'dashboard-master-compact' : ''}`}>
-        {!isDetailView && (
-          <div className="dashboard-search-bar">
-            <div className="topic-search-wrapper">
-              <input
-                className="topic-search-input"
-                type="text"
-                placeholder={`Search ${mode} for topics, questions, or papers…`}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <span className="topic-search-icon">🔍</span>
-              {searchQuery && (
-                <button
-                  className="topic-search-clear"
-                  onClick={() => setSearchQuery('')}
-                  type="button"
-                  aria-label="Clear search"
-                >
-                  ✕
-                </button>
-              )}
+      <div
+        className={`dashboard-master ${isDetailView ? 'dashboard-master-compact' : ''} ${
+          !isDetailView && mode === 'Forge' ? 'dashboard-master-forge' : ''
+        } ${!isDetailView && mode === 'Fields' ? 'dashboard-master-fields' : ''}`}
+      >
+        {isDetailView ? (
+          <>
+            <div className="dashboard-hero-wrap dashboard-hero-wrap-compact">
+              {heroCard('compact')}
+            </div>
+            <div className="dashboard-carousels">{carouselSections}</div>
+          </>
+        ) : mode === 'Forge' ? (
+          <div className="dashboard-browse-layout">
+            <aside className="dashboard-hero-sidebar">{heroCard('side')}</aside>
+            <div className="dashboard-browse-main">
+              {searchBar}
+              <div className="dashboard-carousels">{carouselSections}</div>
             </div>
           </div>
+        ) : (
+          <>
+            {searchBar}
+            <div className="dashboard-hero-wrap">{heroCard('top')}</div>
+            <div className="dashboard-carousels">{carouselSections}</div>
+          </>
         )}
-
-        {/* Hero */}
-        <div className={`dashboard-hero-wrap ${isDetailView ? 'dashboard-hero-wrap-compact' : ''}`}>
-          <div
-            className={`dashboard-hero ${isDetailView ? 'dashboard-hero-compact' : ''} ${selectedItem?.id === activeData.hero.id ? 'selected' : ''}`}
-            onClick={() => handleSelectItem(activeData.hero)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => e.key === 'Enter' && handleSelectItem(activeData.hero)}
-          >
-            <div className="dashboard-hero-glow" aria-hidden="true" />
-            {!isDetailView && (
-              <span className="dashboard-hero-deco" aria-hidden="true">
-                {mode === 'Fields' ? '∫' : '∑'}
-              </span>
-            )}
-            <div className="dashboard-hero-content">
-              <h2 className="dashboard-hero-title">{activeData.hero.title}</h2>
-              {!isDetailView && (
-                <div className="dashboard-hero-tags">
-                  <span className="dashboard-tag dashboard-tag-featured">Featured</span>
-                  <span className="dashboard-tag dashboard-tag-interactive">Interactive</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Carousels */}
-        <div className="dashboard-carousels">
-          {activeData.carousels.map((carousel, idx) => (
-            <section key={idx} className="dashboard-carousel-section">
-              <h3 className="dashboard-carousel-title">{carousel.title}</h3>
-              <div className={`dashboard-carousel-track ${isDetailView ? 'dashboard-carousel-track-vertical' : ''}`}>
-                {carousel.items.map((item) => (
-                  <div
-                    key={item.id}
-                    className={`dashboard-card ${isDetailView ? 'dashboard-card-compact' : ''} ${selectedItem?.id === item.id ? 'selected' : ''}`}
-                    onClick={() => handleSelectItem(item)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSelectItem(item)}
-                  >
-                    <div className="dashboard-card-inner">
-                      <h4 className="dashboard-card-title">{item.title}</h4>
-                      <span className={`dashboard-card-badge dashboard-card-badge-${item.difficulty.toLowerCase()}`}>
-                        {item.difficulty}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
       </div>
 
       {/* Detail pane */}
