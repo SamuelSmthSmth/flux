@@ -7,6 +7,7 @@ import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import "./App.css";
 import { Analytics } from '@vercel/analytics/react';
+import Dashboard from './components/Dashboard';
 
 // ─── Firestore Metadata Index ─────────────────────────────────
 interface MetadataIndex {
@@ -49,9 +50,9 @@ function useMetadataIndex() {
 }
 
 // ─── Types ────────────────────────────────────────────────────
-type Mode = "Flux" | "Bee" | "Forge";
+type Mode = "Flux" | "Fields" | "Forge";
 type Theme = "light" | "dark";
-type ActiveState = "setup" | "playing-bee" | "viewing-paper" | "generating-pdf";
+type ActiveState = "setup" | "playing-fields" | "viewing-paper" | "generating-pdf";
 type WorkspaceTab = "none" | "mark_scheme" | "examiner_report";
 
 
@@ -86,40 +87,7 @@ const SHARED_BOARDS = new Set(["Edexcel", "AQA", "OCR"]);
 
 // ─── Dummy Data ───────────────────────────────────────────────
 
-const DUMMY_QUESTIONS = [
-  {
-    id: 1,
-    topic: "Integration",
-    question: "Using integration by parts, evaluate ∫ x² eˣ dx.",
-    marks: 6,
-    markScheme:
-      "M1: Identifies u = x², dv = eˣ dx and applies integration by parts.\nA1: First application gives x²eˣ − 2∫ xeˣ dx.\nM1: Applies integration by parts a second time to ∫ xeˣ dx.\nA1: Obtains xeˣ − eˣ.\nM1: Combines all terms correctly.\nA1: Final answer x²eˣ − 2xeˣ + 2eˣ + C.",
-    examinerNotes:
-      "Many candidates forgot to apply integration by parts twice, stopping after the first iteration. A significant number also omitted the constant of integration. Well-prepared students completed this efficiently in under 4 minutes.",
-  },
-  {
-    id: 2,
-    topic: "Differentiation",
-    question:
-      "A curve is defined by the equation y = (3x² − 1) / (2x + 5). Find dy/dx and determine the coordinates of any stationary points.",
-    marks: 8,
-    markScheme:
-      "M1: Applies the quotient rule correctly.\nA1: dy/dx = (6x(2x+5) − 2(3x²−1)) / (2x+5)².\nA1: Simplifies to (6x² + 30x + 2) / (2x+5)².\nM1: Sets numerator equal to zero for stationary points.\nA1: Solves 6x² + 30x + 2 = 0 using the quadratic formula.\nA1: Correct x-coordinates.\nM1: Substitutes back to find y-coordinates.\nA1: Both stationary points stated correctly.",
-    examinerNotes:
-      "The quotient rule was generally well applied. Common errors included sign mistakes during simplification of the numerator and failure to fully simplify the quadratic. Some candidates used the product rule on y = (3x²−1)(2x+5)⁻¹ which was equally acceptable.",
-  },
-  {
-    id: 3,
-    topic: "Vectors",
-    question:
-      "Points A, B, and C have position vectors a = 2i + 3j − k, b = 4i − j + 2k, and c = i + 5j + 3k respectively. Show that angle BAC = arccos(−7/√(798)).",
-    marks: 5,
-    markScheme:
-      "M1: Finds vectors AB = b − a and AC = c − a.\nA1: AB = 2i − 4j + 3k, AC = −i + 2j + 4k.\nM1: Calculates dot product AB · AC.\nA1: AB · AC = −2 − 8 + 12 = 2… (continues to verify given result).\nA1: Correctly applies cos θ = (AB · AC) / (|AB| × |AC|) and confirms given expression.",
-    examinerNotes:
-      "This was a 'show that' question, so candidates needed to present clear working. Marks were lost when students jumped to the answer without showing intermediate vector calculations. Direction of vectors (AB vs BA) was a common source of sign errors.",
-  },
-];
+
 
 // ─── Reusable Components ──────────────────────────────────────
 
@@ -162,25 +130,7 @@ function PillToggle({
 
 
 
-/** Small on/off toggle for include/exclude options */
-function MiniToggle({
-  label,
-  on,
-  onToggle,
-}: {
-  label: string;
-  on: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <div className="mini-toggle" onClick={onToggle}>
-      <span className="mini-toggle-label">{label}</span>
-      <div className={`mini-toggle-track ${on ? "on" : ""}`}>
-        <div className="mini-toggle-thumb" />
-      </div>
-    </div>
-  );
-}
+
 
 /** Helper to ensure block math renders correctly by adding newlines */
 const formatMathText = (text: string) => {
@@ -435,44 +385,13 @@ function App() {
     }
   };
 
-  // --- Right panel: Bee-specific ---
-  const [beeTimeLimit, setBeeTimeLimit] = useState(3);
-  const [beeQuestionCount, setBeeQuestionCount] = useState(10);
-
-  // --- Right panel: Forge-specific ---
-  const [forgeQuestionCount, setForgeQuestionCount] = useState(12);
-  const [forgeDuration, setForgeDuration] = useState("2");
-  const [forgeShowThat, setForgeShowThat] = useState(true);
-  const [forgeMultipleChoice, setForgeMultipleChoice] = useState(false);
-
-  // --- Bee timer state ---
-  const [beeTimeRemaining, setBeeTimeRemaining] = useState(0);
-  const [beeCurrentQ, setBeeCurrentQ] = useState(0);
-  const beeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
   // --- Theme persistence ---
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("misty-theme", theme);
   }, [theme]);
 
-  // --- Bee countdown timer ---
-  useEffect(() => {
-    if (activeState === "playing-bee" && beeTimeRemaining > 0) {
-      beeTimerRef.current = setInterval(() => {
-        setBeeTimeRemaining((t) => {
-          if (t <= 1) {
-            if (beeTimerRef.current) clearInterval(beeTimerRef.current);
-            return 0;
-          }
-          return t - 1;
-        });
-      }, 1000);
-    }
-    return () => {
-      if (beeTimerRef.current) clearInterval(beeTimerRef.current);
-    };
-  }, [activeState, beeTimeRemaining > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   // --- Toggle helpers ---
   const toggleTheme = () =>
@@ -500,19 +419,8 @@ function App() {
   }, [difficulty, subject, availableBoards]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Action handlers ---
-  const handleStartBee = () => {
-    setBeeTimeRemaining(beeTimeLimit * 60);
-    setBeeCurrentQ(0);
-    setActiveState("playing-bee");
-  };
-
-  const handleNextBeeQuestion = () => {
-    setBeeCurrentQ((q) => (q + 1) % DUMMY_QUESTIONS.length);
-  };
-
   const handleExitActive = () => {
     setActiveState("setup");
-    if (beeTimerRef.current) clearInterval(beeTimerRef.current);
   };
 
 
@@ -556,30 +464,11 @@ function App() {
     }
   };
 
-  const handleBuildPdf = async () => {
-    setActiveState("generating-pdf");
-    try {
-      // Simulate build processing time
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      await generateQuestions();
-    } catch (e) {
-      setActiveState("setup");
-    }
-  };
 
 
 
-  // --- Format timer ---
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  };
 
-  const beeProgress =
-    beeTimeLimit * 60 > 0
-      ? (beeTimeRemaining / (beeTimeLimit * 60)) * 100
-      : 0;
+
 
   // --- Hide side panels during active states ---
   const showPanels = activeState === "setup";
@@ -607,7 +496,7 @@ function App() {
 
         {/* Mode Switcher */}
         <div className="mode-switcher">
-          {(["Flux", "Bee", "Forge"] as Mode[]).map((mode) => (
+          {(["Flux", "Fields", "Forge"] as Mode[]).map((mode) => (
             <button
               key={mode}
               className={`mode-btn ${activeMode === mode ? "active" : ""}`}
@@ -635,11 +524,13 @@ function App() {
         </div>
       </header>
 
-      {/* ─── Main 3-pane layout ─── */}
-      <div className="main-layout">
-        {/* ── Left Panel ── */}
-        {showPanels && (
-          <aside className="panel panel-left">
+      {/* ─── Main Content Area ─── */}
+      <div className="main-layout h-[calc(100vh-64px)] overflow-hidden">
+        {activeMode === "Flux" ? (
+          <>
+            {/* ── Left Panel ── */}
+            {showPanels && (
+              <aside className="panel panel-left">
             {metadataLoading ? (
               <>
                 <div className="panel-section">
@@ -755,15 +646,9 @@ function App() {
                                     className={`nested-subtopic-item${isSelected ? " selected" : ""}`}
                                     onClick={() => handleSubtopicToggle(st)}
                                   >
-                                    {activeMode === "Forge" ? (
-                                      <div className={`checkbox-square ${isSelected ? "checked" : ""}`}>
-                                        <div className="checkbox-check" />
-                                      </div>
-                                    ) : (
                                       <div className="radio-circle">
                                         <div className="radio-dot" />
                                       </div>
-                                    )}
                                     <span className="nested-subtopic-name">{highlightText(displayName)}</span>
                                   </div>
                                 );
@@ -815,105 +700,11 @@ function App() {
                   )}
                 </div>
               )}
-
-              {activeMode === "Bee" && (
-                <div className="center-content" key="bee-setup">
-                  <h2 className="center-title">Misty Bee</h2>
-                  <p className="center-subtitle">
-                    Race against the clock. Solve as many problems as you can
-                    before time runs out.
-                  </p>
-                  <button
-                    className="btn-danger"
-                    onClick={handleStartBee}
-                    type="button"
-                  >
-                    ▶ Start Bee
-                  </button>
-                </div>
-              )}
-
-              {activeMode === "Forge" && (
-                <div className="center-content" key="forge-setup">
-                  <h2 className="center-title">Paper Forger</h2>
-                  <p className="center-subtitle">
-                    Compile a full A-Level standard paper from your selected
-                    topics and exam board specifications.
-                  </p>
-                  <button
-                    className="btn-primary"
-                    type="button"
-                    onClick={generateQuestions}
-                    disabled={loadingQuestions || !selectedDbTopic}
-                  >
-                    {loadingQuestions ? (
-                      <>
-                        <span className="btn-spinner" />
-                        Forging...
-                      </>
-                    ) : (
-                      <>
-                        <span>⚒</span> Forge Paper
-                      </>
-                    )}
-                  </button>
-                  {queryError && (
-                    <div className="error-message" style={{ marginTop: "12px", color: "var(--danger-color)" }}>
-                      {queryError}
-                    </div>
-                  )}
-                </div>
-              )}
             </>
           )}
 
           {/* ═══ BEE ACTIVE STATE ═══ */}
-          {activeState === "playing-bee" && (
-            <div className="bee-arena" key="bee-active">
-              {/* Timer + Progress */}
-              <div className="bee-arena-header">
-                <div className="bee-timer">{formatTime(beeTimeRemaining)}</div>
-                <div className="bee-progress-row">
-                  <span className="bee-progress-label">
-                    Q{beeCurrentQ + 1} of {DUMMY_QUESTIONS.length}
-                  </span>
-                  <span className="bee-progress-label">
-                    {formatTime(beeTimeRemaining)} remaining
-                  </span>
-                </div>
-                <div className="bee-progress-track">
-                  <div
-                    className="bee-progress-fill"
-                    style={{ width: `${beeProgress}%` }}
-                  />
-                </div>
-              </div>
 
-              {/* Question Card */}
-              <QuestionCard
-                question={DUMMY_QUESTIONS[beeCurrentQ]}
-                showExpandables={false}
-              />
-
-              {/* Controls */}
-              <div className="bee-controls">
-                <button
-                  className="btn-primary"
-                  type="button"
-                  onClick={handleNextBeeQuestion}
-                >
-                  Next Question →
-                </button>
-                <button
-                  className="btn-ghost"
-                  type="button"
-                  onClick={handleExitActive}
-                >
-                  End Bee
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* ═══ PDF GENERATING STATE ═══ */}
           {activeState === "generating-pdf" && (
@@ -936,9 +727,7 @@ function App() {
                 <div className="paper-viewer-header">
                   <div>
                     <h2 className="paper-viewer-title">
-                      {activeMode === "Forge"
-                        ? "Forged Paper"
-                        : "Generated Questions"}
+                      Generated Questions
                     </h2>
                     <p className="paper-viewer-meta">
                       {questionsList.length} {questionsList.length === 1 ? "question" : "questions"} • {subject} • {examBoard} • {selectedDbTopic || "All Topics"}{selectedDbSubtopics.length > 0 ? ` (${selectedDbSubtopics.map(st => st === "" ? "General" : st).join(", ")})` : ""} • {difficulty}
@@ -1111,162 +900,14 @@ function App() {
               </>
             )}
 
-            {/* ─── Bee Settings ─── */}
-            {activeMode === "Bee" && (
-              <>
-                <div className="panel-section">
-                  <div className="setting-group">
-                    <span className="setting-label">Time Limit (mins)</span>
-                    <input
-                      className="number-input"
-                      type="number"
-                      min={1}
-                      max={60}
-                      value={beeTimeLimit}
-                      onChange={(e) =>
-                        setBeeTimeLimit(Number(e.target.value) || 1)
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div className="panel-section">
-                  <div className="setting-group">
-                    <span className="setting-label">Number of Questions</span>
-                    <input
-                      className="number-input"
-                      type="number"
-                      min={1}
-                      max={100}
-                      value={beeQuestionCount}
-                      onChange={(e) =>
-                        setBeeQuestionCount(Number(e.target.value) || 1)
-                      }
-                    />
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* ─── Forge Settings ─── */}
-            {activeMode === "Forge" && (
-              <>
-                <div className="panel-section">
-                  <div className="setting-group">
-                    <span className="setting-label">Subject</span>
-                    <PillToggle
-                      options={["Physics", "Mathematics", "Further Maths"]}
-                      value={subject}
-                      onChange={setSubject}
-                    />
-                  </div>
-                </div>
-
-                <div className="panel-section">
-                  <div className="setting-group">
-                    <span className="setting-label">Difficulty</span>
-                    <PillToggle
-                      options={["Standard", "Advanced"]}
-                      value={difficulty}
-                      onChange={setDifficulty}
-                    />
-                  </div>
-                </div>
-
-                <div className="panel-section">
-                  <div className="setting-group">
-                    <span className="setting-label">Exam Board / Paper Type</span>
-                    {metadataLoading ? (
-                      <div className="skeleton-list">
-                        <div className="skeleton-list-item" />
-                        <div className="skeleton-list-item" />
-                        <div className="skeleton-list-item" />
-                      </div>
-                    ) : (
-                      <div className="subtopic-radio-list">
-                        {filteredBoards.map((b) => {
-                          const isSelected = examBoard === b;
-                          return (
-                            <div
-                              key={b}
-                              className={`subtopic-radio-item ${isSelected ? "selected" : ""}`}
-                              onClick={() => setExamBoard(b)}
-                            >
-                              <div className="radio-circle">
-                                <div className="radio-dot" />
-                              </div>
-                              <span className="subtopic-radio-label">{b}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="panel-section">
-                  <div className="setting-group">
-                    <span className="setting-label">Number of Questions</span>
-                    <input
-                      className="number-input"
-                      type="number"
-                      min={1}
-                      max={50}
-                      value={forgeQuestionCount}
-                      onChange={(e) =>
-                        setForgeQuestionCount(Number(e.target.value) || 1)
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div className="panel-section">
-                  <div className="setting-group">
-                    <span className="setting-label">
-                      Paper Duration (Hours)
-                    </span>
-                    <select
-                      className="select-input"
-                      value={forgeDuration}
-                      onChange={(e) => setForgeDuration(e.target.value)}
-                    >
-                      <option value="1">1 Hour</option>
-                      <option value="1.5">1.5 Hours</option>
-                      <option value="2">2 Hours</option>
-                      <option value="2.5">2.5 Hours</option>
-                      <option value="3">3 Hours</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="panel-section">
-                  <div className="setting-group">
-                    <span className="setting-label">Question Styles</span>
-                    <MiniToggle
-                      label="Include 'Show That' proofs"
-                      on={forgeShowThat}
-                      onToggle={() => setForgeShowThat((v) => !v)}
-                    />
-                    <MiniToggle
-                      label="Include Multiple Choice"
-                      on={forgeMultipleChoice}
-                      onToggle={() => setForgeMultipleChoice((v) => !v)}
-                    />
-                  </div>
-                </div>
-
-                <div className="panel-section">
-                  <button
-                    className="btn-primary panel-btn"
-                    type="button"
-                    onClick={handleBuildPdf}
-                  >
-                    <span>📄</span> Build PDF
-                  </button>
-                </div>
-              </>
-            )}
           </aside>
+        )}
+          </>
+        ) : (
+          <Dashboard 
+            mode={activeMode as "Fields" | "Forge"} 
+            setMode={(m) => setActiveMode(m)} 
+          />
         )}
       </div>
       <Analytics />
