@@ -80,13 +80,11 @@ const EXAM_BOARDS_FALLBACK = [
 // Boards classified as "Standard" (e.g. Edexcel, AQA, OCR, MEI).
 // Everything not in this set is treated as an advanced / competition board.
 const STANDARD_BOARDS = new Set([
-  "Edexcel", 
+  "Edexcel",
+  "Edexcel IAL", 
   "AQA", 
-  "OCR", 
-  "TMUA", 
-  "MAT", 
-  "PAT",
-  "ESAT"
+  "OCR",
+  "MEI"
 ]);
 
 const PHYSICS_ONLY_BOARDS = new Set(["PAT", "ESAT"]);
