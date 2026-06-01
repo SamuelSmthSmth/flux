@@ -314,9 +314,8 @@ function App() {
 
 
   // --- Right panel: shared ---
-  const [subject, setSubject] = useState("Mathematics");
+  const [selectedTier, setSelectedTier] = useState<'standard' | 'advanced'>('standard');
   const [examBoard, setExamBoard] = useState("Edexcel");
-  const [difficulty, setDifficulty] = useState("Standard");
 
   // --- Firestore metadata-driven filter state ---
   const { metadata, loading: metadataLoading, error: metadataError } = useMetadataIndex();
@@ -338,18 +337,12 @@ function App() {
   // Derive available boards from metadata (with fallback)
   const availableBoards = metadata?.boards ?? [...EXAM_BOARDS_FALLBACK];
 
-  // Filter boards by the current difficulty and subject selection
+  // Filter boards by the current tier selection
   const filteredBoards = availableBoards.filter((b) => {
-    const matchesDifficulty = difficulty === "Advanced"
+    const matchesTier = selectedTier === 'advanced'
       ? !STANDARD_BOARDS.has(b)
       : STANDARD_BOARDS.has(b);
-    if (!matchesDifficulty) return false;
-
-    if (subject === "Physics") {
-      return PHYSICS_ONLY_BOARDS.has(b) || SHARED_BOARDS.has(b);
-    } else {
-      return !PHYSICS_ONLY_BOARDS.has(b);
-    }
+    return matchesTier && !PHYSICS_ONLY_BOARDS.has(b);
   });
 
 
@@ -443,24 +436,18 @@ function App() {
 
 
 
-  // --- Cascading Logic: difficulty & subject drive which boards are shown ---
+  // --- Cascading Logic: tier selection drives which boards are shown ---
   useEffect(() => {
     const boards = availableBoards.filter((b) => {
-      const matchesDifficulty = difficulty === "Advanced"
+      const matchesTier = selectedTier === 'advanced'
         ? !STANDARD_BOARDS.has(b)
         : STANDARD_BOARDS.has(b);
-      if (!matchesDifficulty) return false;
-
-      if (subject === "Physics") {
-        return PHYSICS_ONLY_BOARDS.has(b) || SHARED_BOARDS.has(b);
-      } else {
-        return !PHYSICS_ONLY_BOARDS.has(b);
-      }
+      return matchesTier && !PHYSICS_ONLY_BOARDS.has(b);
     });
     if (boards.length > 0 && !boards.includes(examBoard)) {
       setExamBoard(boards[0]);
     }
-  }, [difficulty, subject, availableBoards]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedTier, availableBoards]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Action handlers ---
   const handleExitActive = () => {
@@ -476,7 +463,7 @@ function App() {
       
       qConstraints.push(where("board", "==", examBoard));
       qConstraints.push(where("topic", "==", selectedDbTopic));
-      qConstraints.push(where("difficulty", "==", difficulty));
+      qConstraints.push(where("difficulty", "==", selectedTier === 'standard' ? 'Standard' : 'Advanced'));
       
       if (selectedDbSubtopics.length > 0) {
         if (selectedDbSubtopics.length === 1) {
@@ -776,7 +763,7 @@ function App() {
                       Generated Questions
                     </h2>
                     <p className="paper-viewer-meta">
-                      {questionsList.length} {questionsList.length === 1 ? "question" : "questions"} • {subject} • {examBoard} • {selectedDbTopic || "All Topics"}{selectedDbSubtopics.length > 0 ? ` (${selectedDbSubtopics.map(st => st === "" ? "General" : st).join(", ")})` : ""} • {difficulty}
+                      {questionsList.length} {questionsList.length === 1 ? "question" : "questions"} • Mathematics • {examBoard} • {selectedDbTopic || "All Topics"}{selectedDbSubtopics.length > 0 ? ` (${selectedDbSubtopics.map(st => st === "" ? "General" : st).join(", ")})` : ""} • {selectedTier === 'standard' ? 'Standard' : 'Advanced'}
                     </p>
                   </div>
                   <button
@@ -880,24 +867,36 @@ function App() {
             {activeMode === "Flux" && (
               <>
                 <div className="panel-section">
-                  <div className="setting-group">
-                    <span className="setting-label">Subject</span>
-                    <PillToggle
-                      options={["Physics", "Mathematics", "Further Maths"]}
-                      value={subject}
-                      onChange={setSubject}
-                    />
-                  </div>
-                </div>
+                  <div className="flex flex-col gap-4 w-full mb-8">
+                    {/* Standard Button */}
+                    <div
+                      onClick={() => setSelectedTier('standard')}
+                      className={`w-full text-left p-5 rounded-xl border transition-all duration-300 relative overflow-hidden group cursor-pointer ${
+                        selectedTier === 'standard'
+                          ? 'bg-slate-800 border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                          : 'bg-transparent border-slate-700/50 hover:bg-slate-800/50 hover:border-slate-600'
+                      }`}
+                    >
+                      <h3 className="text-lg font-semibold tracking-wide text-slate-200 mb-1">Standard</h3>
+                      <p className="text-sm text-slate-400 leading-relaxed">
+                        Core A-Level Mathematics syllabus and structured topic questions.
+                      </p>
+                    </div>
 
-                <div className="panel-section">
-                  <div className="setting-group">
-                    <span className="setting-label">Difficulty</span>
-                    <PillToggle
-                      options={["Standard", "Advanced"]}
-                      value={difficulty}
-                      onChange={setDifficulty}
-                    />
+                    {/* Advanced Button */}
+                    <div
+                      onClick={() => setSelectedTier('advanced')}
+                      className={`w-full text-left p-5 rounded-xl border transition-all duration-300 relative overflow-hidden group cursor-pointer ${
+                        selectedTier === 'advanced'
+                          ? 'bg-slate-800 border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                          : 'bg-transparent border-slate-700/50 hover:bg-slate-800/50 hover:border-slate-600'
+                      }`}
+                    >
+                      <h3 className="text-lg font-semibold tracking-wide text-slate-200 mb-1">Advanced</h3>
+                      <p className="text-sm text-slate-400 leading-relaxed">
+                        Further Mathematics, STEP, AEA, and hardcore extension challenges.
+                      </p>
+                    </div>
                   </div>
                 </div>
 

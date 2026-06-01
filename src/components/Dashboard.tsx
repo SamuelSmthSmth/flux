@@ -358,11 +358,7 @@ export default function Dashboard({ mode }: DashboardProps) {
                 {mode === 'Fields' ? (
                   <FieldsDetail item={selectedItem as FieldDoc} />
                 ) : (
-                  <ForgeDetail
-                    item={selectedItem as ForgeDoc}
-                    activeTab={activeTab}
-                    setActiveTab={setActiveTab}
-                  />
+                  <ForgeDetail item={selectedItem as ForgeDoc} />
                 )}
               </div>
             </div>
@@ -373,31 +369,48 @@ export default function Dashboard({ mode }: DashboardProps) {
   );
 }
 
+// ─── Reusable Detail Heading ──────────────────────────────────
+function SectionHeading({ title }: { title: string }) {
+  return (
+    <div className="flex items-center w-full mt-24 mb-12 opacity-80">
+      <div className="h-px bg-gradient-to-r from-transparent via-slate-600 to-transparent flex-1"></div>
+      <h2 className="text-2xl md:text-3xl font-bold tracking-[0.2em] uppercase text-slate-200 px-8 text-center">{title}</h2>
+      <div className="h-px bg-gradient-to-r from-transparent via-slate-600 to-transparent flex-1"></div>
+    </div>
+  );
+}
+
 // ─── Fields Detail Pane ───────────────────────────────────────
 function FieldsDetail({ item }: { item: FieldDoc }) {
   return (
-    <div className="dashboard-fields-content">
+    <div className="dashboard-fields-content flex flex-col gap-y-8 pb-32">
       {/* Formal Statement */}
       {item.formal_statement && (
-        <div className="dashboard-markdown">
-          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-            {formatMathText(item.formal_statement)}
-          </ReactMarkdown>
+        <div className="flex flex-col">
+          <SectionHeading title="Formal Statement" />
+          <div className="dashboard-markdown text-lg leading-relaxed">
+            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+              {formatMathText(item.formal_statement)}
+            </ReactMarkdown>
+          </div>
         </div>
       )}
 
       {/* Rigorous Proof */}
       {item.rigorous_proof && (
-        <div className="dashboard-markdown">
-          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-            {formatMathText(item.rigorous_proof)}
-          </ReactMarkdown>
+        <div className="flex flex-col">
+          <SectionHeading title="Rigorous Proof" />
+          <div className="dashboard-markdown text-lg leading-relaxed">
+            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+              {formatMathText(item.rigorous_proof)}
+            </ReactMarkdown>
+          </div>
         </div>
       )}
 
       {/* GeoGebra Sandbox */}
       {item.geogebra && (
-        <div className="dashboard-sandbox">
+        <div className="dashboard-sandbox mt-12">
           <div className="dashboard-sandbox-header">
             <span className="dashboard-sandbox-label">GeoGebra Interactive Sandbox</span>
             <div className="dashboard-sandbox-dots">
@@ -427,53 +440,65 @@ function FieldsDetail({ item }: { item: FieldDoc }) {
 }
 
 // ─── Forge Detail Pane ────────────────────────────────────────
-function ForgeDetail({
-  item,
-  activeTab,
-  setActiveTab,
-}: {
-  item: ForgeDoc;
-  activeTab: ForgeTabId;
-  setActiveTab: (tab: ForgeTabId) => void;
-}) {
-  const tabContentMap: Record<ForgeTabId, string> = {
-    question: item.question,
-    solution: item.solution,
-    discussion: item.discussion,
-  };
-
-  const content = tabContentMap[activeTab] || '';
-
+function ForgeDetail({ item }: { item: ForgeDoc }) {
   return (
-    <div className="dashboard-forge-content">
-      <div className="dashboard-forge-tabs">
-        {FORGE_TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            className={`dashboard-forge-tab ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="dashboard-forge-panel">
-        {content ? (
-          <div className="dashboard-markdown">
+    <div className="dashboard-forge-content flex flex-col gap-y-8 pb-32">
+      {/* Question */}
+      {item.question && (
+        <div className="flex flex-col">
+          <SectionHeading title="Question" />
+          <div className="dashboard-markdown text-lg leading-relaxed">
             <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-              {formatMathText(content)}
+              {formatMathText(item.question)}
             </ReactMarkdown>
           </div>
-        ) : (
-          <div className="center-content" style={{ padding: '40px 0' }}>
-            <p className="center-subtitle">
-              No {activeTab.replace('_', ' ')} available for this entry.
-            </p>
+        </div>
+      )}
+
+      {/* The Solution */}
+      {item.solution && (
+        <div className="flex flex-col">
+          <SectionHeading title="The Solution" />
+          <div className="relative group">
+            <div className="absolute inset-0 flex items-center justify-center z-10 opacity-100 transition-opacity duration-300 group-hover:opacity-0 pointer-events-none">
+              <span className="bg-slate-800/80 text-slate-300 px-4 py-2 rounded-full backdrop-blur-sm tracking-widest text-xs uppercase border border-slate-700">
+                Hover to reveal
+              </span>
+            </div>
+            <div className="dashboard-markdown text-lg leading-relaxed blur-md transition-all duration-500 ease-out group-hover:blur-none">
+              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                {formatMathText(item.solution)}
+              </ReactMarkdown>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Discussion */}
+      {item.discussion && (
+        <div className="flex flex-col">
+          <SectionHeading title="Discussion" />
+          <div className="relative group">
+            <div className="absolute inset-0 flex items-center justify-center z-10 opacity-100 transition-opacity duration-300 group-hover:opacity-0 pointer-events-none">
+              <span className="bg-slate-800/80 text-slate-300 px-4 py-2 rounded-full backdrop-blur-sm tracking-widest text-xs uppercase border border-slate-700">
+                Hover to reveal
+              </span>
+            </div>
+            <div className="dashboard-markdown text-lg leading-relaxed blur-md transition-all duration-500 ease-out group-hover:blur-none">
+              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                {formatMathText(item.discussion)}
+              </ReactMarkdown>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fallback if nothing is present */}
+      {!item.question && !item.solution && !item.discussion && (
+        <div className="center-content" style={{ padding: '40px 0' }}>
+          <p className="center-subtitle">No content available for this forge entry.</p>
+        </div>
+      )}
     </div>
   );
 }
