@@ -69,6 +69,7 @@ const MODE_SWITCH_IN_MS = INTRO_DURATION_MS / 2;
 // Kept as a fallback if the database fetch fails.
 const EXAM_BOARDS_FALLBACK = [
   "Edexcel",
+  "Edexcel IAL",
   "AQA",
   "OCR",
   "MEI",
