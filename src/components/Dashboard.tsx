@@ -1,112 +1,251 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+
+// ─── Data Models ──────────────────────────────────────────────
+interface FieldDoc {
+  id: string;
+  title: string;
+  carousel_category: string;
+  formal_statement: string;
+  rigorous_proof: string;
+  geogebra?: string;
+}
+
+interface ForgeDoc {
+  id: string;
+  title: string;
+  carousel_category: string;
+  question: string;
+  solution: string;
+  discussion: string;
+}
 
 interface DashboardProps {
   mode: 'Fields' | 'Forge';
   setMode?: (mode: 'Fields' | 'Forge') => void;
 }
 
-type TabId = 'preflight' | 'hints' | 'solution' | 'postmortem';
+type ForgeTabId = 'question' | 'solution' | 'discussion';
 
-const FORGE_TABS: { id: TabId; label: string }[] = [
-  { id: 'preflight', label: 'Pre-Flight Briefing' },
-  { id: 'hints', label: 'Strategic Hints' },
-  { id: 'solution', label: 'The Neek Solution' },
-  { id: 'postmortem', label: 'Post-Mortem' },
+const FORGE_TABS: { id: ForgeTabId; label: string }[] = [
+  { id: 'question', label: 'Question' },
+  { id: 'solution', label: 'The Solution' },
+  { id: 'discussion', label: 'Discussion' },
 ];
 
-export default function Dashboard({ mode }: DashboardProps) {
-  const [selectedItem, setSelectedItem] = useState<any | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<TabId>('preflight');
+/** Helper to ensure block math renders correctly by adding newlines */
+const formatMathText = (text: string) => {
+  return text
+    .replace(/\$\$/g, '\n$$\n')
+    .replace(/\n{3,}/g, '\n\n');
+};
 
-  const fieldsData = {
-    hero: { id: 'hero', title: 'The Chain Rule: First Principles', type: 'Hero' },
-    carousels: [
-      {
-        title: 'Essential Proofs',
-        items: [
-          { id: 'f1', title: 'Irrationality of √2', difficulty: 'Standard' },
-          { id: 'f2', title: 'Power Rule', difficulty: 'Standard' },
-          { id: 'f3', title: 'Infinite Primes', difficulty: 'Advanced' },
-        ],
-      },
-      {
-        title: 'Foundational Algebra',
-        items: [
-          { id: 'f4', title: 'Completing the Square', difficulty: 'Standard' },
-          { id: 'f5', title: 'Logarithm Rules', difficulty: 'Standard' },
-          { id: 'f6', title: 'Pythagoras', difficulty: 'Standard' },
-        ],
-      },
-    ],
-  };
+// ─── Carousel Grouping Helper ─────────────────────────────────
+function groupByCategory<T extends { carousel_category: string }>(
+  docs: T[]
+): { category: string; items: T[] }[] {
+  const map = new Map<string, T[]>();
+  for (const doc of docs) {
+    const key = doc.carousel_category || 'Uncategorised';
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(doc);
+  }
+  return Array.from(map, ([category, items]) => ({ category, items }));
+}
 
-  const forgeData = {
-    hero: { id: 'hero', title: 'AEA 2008 Integration Beast', type: 'Hero' },
-    carousels: [
-      {
-        title: 'Hall of Fame',
-        items: [
-          { id: 'fo1', title: 'STEP III 2015 Q1', difficulty: 'Hardcore' },
-          { id: 'fo2', title: 'IMO 2010 Gold', difficulty: 'Hardcore' },
-          { id: 'fo3', title: 'STEP III 2021 Q4', difficulty: 'Hardcore' },
-        ],
-      },
-      {
-        title: 'Hardcore Focus',
-        items: [
-          { id: 'fo4', title: 'Brutal Integration', difficulty: 'Hardcore' },
-          { id: 'fo5', title: 'Abstract Algebra', difficulty: 'Hardcore' },
-          { id: 'fo6', title: 'STEP II Vectors', difficulty: 'Hardcore' },
-        ],
-      },
-    ],
-  };
-
-  const activeData = mode === 'Fields' ? fieldsData : forgeData;
-  const isDetailView = selectedItem !== null;
-
-  const handleSelectItem = (item: any) => {
-    setSelectedItem(item);
-    setActiveTab('preflight');
-  };
-
-  const heroSelected = selectedItem?.id === activeData.hero.id;
-
-  const heroCard = (variant: 'side' | 'compact' | 'top') => (
-    <div
-      className={`dashboard-hero ${
-        variant === 'side'
-          ? 'dashboard-hero-side'
-          : variant === 'compact'
-            ? 'dashboard-hero-compact'
-            : ''
-      } ${heroSelected ? 'selected' : ''}`}
-      onClick={() => handleSelectItem(activeData.hero)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => e.key === 'Enter' && handleSelectItem(activeData.hero)}
-    >
-      <div className="dashboard-hero-glow" aria-hidden="true" />
-      {variant !== 'compact' && (
-        <span className="dashboard-hero-deco" aria-hidden="true">
-          {mode === 'Fields' ? '∫' : '∑'}
-        </span>
-      )}
-      <div className="dashboard-hero-content">
-        <h2 className="dashboard-hero-title">{activeData.hero.title}</h2>
-        {variant !== 'compact' && (
-          <div className="dashboard-hero-tags">
-            <span className="dashboard-tag dashboard-tag-featured">Featured</span>
-            <span className="dashboard-tag dashboard-tag-interactive">Interactive</span>
+// ─── Loading Skeleton ─────────────────────────────────────────
+function DashboardSkeleton() {
+  return (
+    <div className="dashboard">
+      <div className="dashboard-master dashboard-master-fields">
+        {/* Skeleton search bar */}
+        <div className="dashboard-search-bar">
+          <div className="topic-search-wrapper">
+            <div className="skeleton-select" style={{ height: 42 }} />
           </div>
-        )}
+        </div>
+
+        {/* Skeleton hero */}
+        <div className="dashboard-hero-wrap">
+          <div
+            className="skeleton-select"
+            style={{ height: 200, borderRadius: 'var(--radius-xl)' }}
+          />
+        </div>
+
+        {/* Skeleton carousels */}
+        <div className="dashboard-carousels">
+          {[1, 2].map((row) => (
+            <section key={row} className="dashboard-carousel-section">
+              <div className="skeleton-select" style={{ width: 140, height: 14, marginBottom: 16 }} />
+              <div className="dashboard-carousel-track">
+                {[1, 2, 3, 4].map((card) => (
+                  <div
+                    key={card}
+                    className="skeleton-select"
+                    style={{
+                      width: 240,
+                      height: 160,
+                      flexShrink: 0,
+                      borderRadius: 'var(--radius-lg)',
+                    }}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
       </div>
     </div>
   );
+}
+
+// ─── Main Component ───────────────────────────────────────────
+export default function Dashboard({ mode }: DashboardProps) {
+  // --- Data state ---
+  const [fieldsData, setFieldsData] = useState<FieldDoc[]>([]);
+  const [forgeData, setForgeData] = useState<ForgeDoc[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // --- UI state ---
+  const [selectedItem, setSelectedItem] = useState<FieldDoc | ForgeDoc | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<ForgeTabId>('question');
+
+  // --- Fetch on mount ---
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [fieldsSnap, forgeSnap] = await Promise.all([
+          getDocs(collection(db, 'fields')),
+          getDocs(collection(db, 'forge')),
+        ]);
+
+        const fields: FieldDoc[] = fieldsSnap.docs.map((d) => ({
+          id: d.id,
+          title: d.data().title ?? 'Untitled',
+          carousel_category: d.data().carousel_category ?? '',
+          formal_statement: d.data().formal_statement ?? '',
+          rigorous_proof: d.data().rigorous_proof ?? '',
+          geogebra: d.data().geogebra,
+        }));
+
+        const forge: ForgeDoc[] = forgeSnap.docs.map((d) => ({
+          id: d.id,
+          title: d.data().title ?? 'Untitled',
+          carousel_category: d.data().carousel_category ?? '',
+          question: d.data().question ?? '',
+          solution: d.data().solution ?? '',
+          discussion: d.data().discussion ?? '',
+        }));
+
+        setFieldsData(fields);
+        setForgeData(forge);
+      } catch (err) {
+        console.error('Dashboard: failed to fetch data', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // --- Clear selection on mode switch ---
+  useEffect(() => {
+    setSelectedItem(null);
+    setSearchQuery('');
+    setActiveTab('question');
+  }, [mode]);
+
+  // --- Active dataset ---
+  const activeRawData = mode === 'Fields' ? fieldsData : forgeData;
+
+  // --- Filter by search ---
+  const filteredData = useMemo(() => {
+    if (!searchQuery.trim()) return activeRawData;
+    const q = searchQuery.toLowerCase();
+    return activeRawData.filter(
+      (item) =>
+        item.title.toLowerCase().includes(q) ||
+        item.carousel_category.toLowerCase().includes(q)
+    );
+  }, [activeRawData, searchQuery]);
+
+  // --- Group into carousels ---
+  const carousels = useMemo(() => groupByCategory(filteredData), [filteredData]);
+
+  // --- Hero: the first document in the dataset ---
+  const heroItem = activeRawData.length > 0 ? activeRawData[0] : null;
+
+  const isDetailView = selectedItem !== null;
+
+  const handleSelectItem = (item: FieldDoc | ForgeDoc) => {
+    setSelectedItem(item);
+    setActiveTab('question');
+  };
+
+  // ─── Loading State ────────────────────────────────────────────
+  if (loading) return <DashboardSkeleton />;
+
+  // ─── Empty State ──────────────────────────────────────────────
+  if (activeRawData.length === 0) {
+    return (
+      <div className="dashboard">
+        <div className="dashboard-master dashboard-master-fields">
+          <div className="center-content" style={{ padding: '80px 32px' }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: 16 }}>📭</div>
+            <h2 className="center-title">No {mode} content yet</h2>
+            <p className="center-subtitle">
+              Documents will appear here once they're added to the <strong>{mode.toLowerCase()}</strong> collection.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Shared UI Pieces ─────────────────────────────────────────
+  const heroSelected = selectedItem?.id === heroItem?.id;
+
+  const heroCard = (variant: 'side' | 'compact' | 'top') =>
+    heroItem ? (
+      <div
+        className={`dashboard-hero ${
+          variant === 'side'
+            ? 'dashboard-hero-side'
+            : variant === 'compact'
+              ? 'dashboard-hero-compact'
+              : ''
+        } ${heroSelected ? 'selected' : ''}`}
+        onClick={() => handleSelectItem(heroItem)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => e.key === 'Enter' && handleSelectItem(heroItem)}
+      >
+        <div className="dashboard-hero-glow" aria-hidden="true" />
+        {variant !== 'compact' && (
+          <span className="dashboard-hero-deco" aria-hidden="true">
+            {mode === 'Fields' ? '∫' : '∑'}
+          </span>
+        )}
+        <div className="dashboard-hero-content">
+          <h2 className="dashboard-hero-title">{heroItem.title}</h2>
+          {variant !== 'compact' && (
+            <div className="dashboard-hero-tags">
+              <span className="dashboard-tag dashboard-tag-featured">{heroItem.carousel_category}</span>
+              {mode === 'Fields' && 'geogebra' in heroItem && (heroItem as FieldDoc).geogebra && (
+                <span className="dashboard-tag dashboard-tag-interactive">Interactive</span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    ) : null;
 
   const searchBar = (
     <div className="dashboard-search-bar">
@@ -135,11 +274,16 @@ export default function Dashboard({ mode }: DashboardProps) {
 
   const carouselSections = (
     <>
-      {activeData.carousels.map((carousel, idx) => (
-        <section key={idx} className="dashboard-carousel-section">
-          <h3 className="dashboard-carousel-title">{carousel.title}</h3>
+      {carousels.length === 0 && searchQuery && (
+        <div className="center-content" style={{ padding: '40px 0' }}>
+          <p className="center-subtitle">No results for "{searchQuery}"</p>
+        </div>
+      )}
+      {carousels.map((group) => (
+        <section key={group.category} className="dashboard-carousel-section">
+          <h3 className="dashboard-carousel-title">{group.category}</h3>
           <div className={`dashboard-carousel-track ${isDetailView ? 'dashboard-carousel-track-vertical' : ''}`}>
-            {carousel.items.map((item) => (
+            {group.items.map((item) => (
               <div
                 key={item.id}
                 className={`dashboard-card ${isDetailView ? 'dashboard-card-compact' : ''} ${selectedItem?.id === item.id ? 'selected' : ''}`}
@@ -150,9 +294,7 @@ export default function Dashboard({ mode }: DashboardProps) {
               >
                 <div className="dashboard-card-inner">
                   <h4 className="dashboard-card-title">{item.title}</h4>
-                  <span className={`dashboard-card-badge dashboard-card-badge-${item.difficulty.toLowerCase()}`}>
-                    {item.difficulty}
-                  </span>
+                  <span className="dashboard-card-badge">{item.carousel_category}</span>
                 </div>
               </div>
             ))}
@@ -162,6 +304,7 @@ export default function Dashboard({ mode }: DashboardProps) {
     </>
   );
 
+  // ─── Render ───────────────────────────────────────────────────
   return (
     <div className={`dashboard ${isDetailView ? 'dashboard-split' : ''}`}>
       {/* Master / Sidebar pane */}
@@ -196,7 +339,7 @@ export default function Dashboard({ mode }: DashboardProps) {
 
       {/* Detail pane */}
       <div className={`dashboard-detail ${isDetailView ? 'dashboard-detail-open' : ''}`}>
-        {isDetailView && (
+        {isDetailView && selectedItem && (
           <>
             <div className="dashboard-detail-header">
               <h2 className="dashboard-detail-title">{selectedItem.title}</h2>
@@ -213,9 +356,13 @@ export default function Dashboard({ mode }: DashboardProps) {
             <div className="dashboard-detail-body">
               <div className="dashboard-detail-content" key={selectedItem.id}>
                 {mode === 'Fields' ? (
-                  <FieldsDetail />
+                  <FieldsDetail item={selectedItem as FieldDoc} />
                 ) : (
-                  <ForgeDetail activeTab={activeTab} setActiveTab={setActiveTab} />
+                  <ForgeDetail
+                    item={selectedItem as ForgeDoc}
+                    activeTab={activeTab}
+                    setActiveTab={setActiveTab}
+                  />
                 )}
               </div>
             </div>
@@ -226,43 +373,77 @@ export default function Dashboard({ mode }: DashboardProps) {
   );
 }
 
-function FieldsDetail() {
+// ─── Fields Detail Pane ───────────────────────────────────────
+function FieldsDetail({ item }: { item: FieldDoc }) {
   return (
     <div className="dashboard-fields-content">
-      <div className="dashboard-prereq-tags">
-        <span className="dashboard-prereq-tag">Prerequisite: Limits</span>
-        <span className="dashboard-prereq-tag">Prerequisite: Functions</span>
-      </div>
+      {/* Formal Statement */}
+      {item.formal_statement && (
+        <div className="dashboard-markdown">
+          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+            {formatMathText(item.formal_statement)}
+          </ReactMarkdown>
+        </div>
+      )}
 
-      <div className="dashboard-markdown">
-        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-          {`## Rigorous Proof\n\nLet $f(x)$ be a differentiable function. The derivative from first principles is defined as:\n\n$$ f'(x) = \\lim_{h \\to 0} \\frac{f(x+h) - f(x)}{h} $$\n\nConsider the power rule for $f(x) = x^n$ where $n$ is a positive integer. Using the binomial expansion:\n\n$$ (x+h)^n = x^n + nx^{n-1}h + \\frac{n(n-1)}{2}x^{n-2}h^2 + \\dots + h^n $$\n\nSubstituting this into our limit definition yields the beautiful result $nx^{n-1}$.`}
-        </ReactMarkdown>
-      </div>
+      {/* Rigorous Proof */}
+      {item.rigorous_proof && (
+        <div className="dashboard-markdown">
+          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+            {formatMathText(item.rigorous_proof)}
+          </ReactMarkdown>
+        </div>
+      )}
 
-      <div className="dashboard-sandbox">
-        <div className="dashboard-sandbox-header">
-          <span className="dashboard-sandbox-label">GeoGebra Interactive Sandbox</span>
-          <div className="dashboard-sandbox-dots">
-            <span /><span /><span />
+      {/* GeoGebra Sandbox */}
+      {item.geogebra && (
+        <div className="dashboard-sandbox">
+          <div className="dashboard-sandbox-header">
+            <span className="dashboard-sandbox-label">GeoGebra Interactive Sandbox</span>
+            <div className="dashboard-sandbox-dots">
+              <span /><span /><span />
+            </div>
+          </div>
+          <div className="dashboard-sandbox-body">
+            <div className="dashboard-sandbox-grid" aria-hidden="true" />
+            <div
+              className="dashboard-sandbox-placeholder"
+              style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', fontSize: '0.78rem', textAlign: 'left', maxWidth: '100%', overflow: 'auto' }}
+            >
+              {item.geogebra}
+            </div>
           </div>
         </div>
-        <div className="dashboard-sandbox-body">
-          <div className="dashboard-sandbox-grid" aria-hidden="true" />
-          <span className="dashboard-sandbox-placeholder">Interactive Element Loading…</span>
+      )}
+
+      {/* Fallback if nothing is present */}
+      {!item.formal_statement && !item.rigorous_proof && !item.geogebra && (
+        <div className="center-content" style={{ padding: '40px 0' }}>
+          <p className="center-subtitle">No content available for this field entry.</p>
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
+// ─── Forge Detail Pane ────────────────────────────────────────
 function ForgeDetail({
+  item,
   activeTab,
   setActiveTab,
 }: {
-  activeTab: TabId;
-  setActiveTab: (tab: TabId) => void;
+  item: ForgeDoc;
+  activeTab: ForgeTabId;
+  setActiveTab: (tab: ForgeTabId) => void;
 }) {
+  const tabContentMap: Record<ForgeTabId, string> = {
+    question: item.question,
+    solution: item.solution,
+    discussion: item.discussion,
+  };
+
+  const content = tabContentMap[activeTab] || '';
+
   return (
     <div className="dashboard-forge-content">
       <div className="dashboard-forge-tabs">
@@ -279,48 +460,17 @@ function ForgeDetail({
       </div>
 
       <div className="dashboard-forge-panel">
-        {activeTab === 'preflight' && (
+        {content ? (
           <div className="dashboard-markdown">
             <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-              {`### The Challenge\n\nEvaluate the integral:\n\n$$ I = \\int_{0}^{\\pi/2} \\frac{\\sin^3 x}{\\sin^3 x + \\cos^3 x} dx $$\n\n**Warning**: Standard integration techniques like substitution or parts will lead you into a brutal algebraic nightmare. You must find the symmetry trick.`}
+              {formatMathText(content)}
             </ReactMarkdown>
           </div>
-        )}
-
-        {activeTab === 'hints' && (
-          <div className="dashboard-hints">
-            <div className="dashboard-hint-card">
-              <span className="dashboard-hint-label">Hint 1</span>
-              <div className="dashboard-markdown">
-                <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                  {`Consider the property $\\int_a^b f(x) dx = \\int_a^b f(a+b-x) dx$.`}
-                </ReactMarkdown>
-              </div>
-            </div>
-            <div className="dashboard-hint-card dashboard-hint-reveal">
-              <span className="dashboard-hint-label">Hint 2 — hover to reveal</span>
-              <div className="dashboard-markdown">
-                <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                  {`Apply the property with $a=0, b=\\pi/2$. What happens to $\\sin(\\pi/2 - x)$?`}
-                </ReactMarkdown>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'solution' && (
-          <div className="dashboard-markdown">
-            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-              {`### Elegant Solution\n\nLet:\n$$ I = \\int_{0}^{\\pi/2} \\frac{\\sin^3 x}{\\sin^3 x + \\cos^3 x} dx $$\n\nUsing the property $\\int_0^a f(x)dx = \\int_0^a f(a-x)dx$:\n\n$$ I = \\int_{0}^{\\pi/2} \\frac{\\sin^3(\\pi/2 - x)}{\\sin^3(\\pi/2 - x) + \\cos^3(\\pi/2 - x)} dx $$\n\nSince $\\sin(\\pi/2-x) = \\cos x$ and $\\cos(\\pi/2-x) = \\sin x$:\n\n$$ I = \\int_{0}^{\\pi/2} \\frac{\\cos^3 x}{\\cos^3 x + \\sin^3 x} dx $$\n\nAdding the two expressions for $I$:\n\n$$ 2I = \\int_{0}^{\\pi/2} \\frac{\\sin^3 x + \\cos^3 x}{\\sin^3 x + \\cos^3 x} dx = \\int_{0}^{\\pi/2} 1 dx = \\frac{\\pi}{2} $$\n\nTherefore, $I = \\frac{\\pi}{4}$.`}
-            </ReactMarkdown>
-          </div>
-        )}
-
-        {activeTab === 'postmortem' && (
-          <div className="dashboard-markdown">
-            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-              {`### Examiner's Post-Mortem\n\nThis is a classic "King's Property" integration problem.\n\nLess than 15% of candidates spotted the symmetry trick immediately. The vast majority attempted Weierstrass substitution ($t = \\tan(x/2)$) which expands into an unmanageable rational function, burning 20+ minutes of exam time for zero marks.\n\n**Key Takeaway**: Always check bounds for symmetry (especially $0$ to $\\pi/2$) before engaging heavy machinery.`}
-            </ReactMarkdown>
+        ) : (
+          <div className="center-content" style={{ padding: '40px 0' }}>
+            <p className="center-subtitle">
+              No {activeTab.replace('_', ' ')} available for this entry.
+            </p>
           </div>
         )}
       </div>
