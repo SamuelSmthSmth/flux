@@ -89,55 +89,9 @@ const STANDARD_BOARDS = new Set([
   "ESAT"
 ]);
 
-// Boards classified as physics-only or shared with physics
 const PHYSICS_ONLY_BOARDS = new Set(["PAT", "ESAT"]);
-const SHARED_BOARDS = new Set(["Edexcel", "AQA", "OCR"]);
-
-// ─── Dummy Data ───────────────────────────────────────────────
-
-
 
 // ─── Reusable Components ──────────────────────────────────────
-
-/** Pill-shaped binary/multi toggle switch */
-function PillToggle({
-  options,
-  value,
-  onChange,
-  disabled,
-}: {
-  options: readonly string[];
-  value: string;
-  onChange: (v: string) => void;
-  disabled?: boolean;
-}) {
-  const activeIndex = Math.max(0, options.indexOf(value));
-  return (
-    <div className={`pill-toggle ${disabled ? "disabled" : ""}`}>
-      <div 
-        className="pill-toggle-slider" 
-        style={{ 
-          width: `calc((100% - 6px) / ${options.length})`, 
-          left: `calc(3px + (100% - 6px) / ${options.length} * ${activeIndex})`
-        }} 
-      />
-      {options.map((opt) => (
-        <button
-          key={opt}
-          className={`pill-toggle-option ${value === opt ? "active" : ""}`}
-          onClick={() => { if (!disabled) onChange(opt); }}
-          type="button"
-          disabled={disabled}
-        >
-          {opt}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-
-
 
 
 /** Helper to ensure block math renders correctly by adding newlines */
@@ -436,6 +390,11 @@ function App() {
 
 
 
+  const handleTierChange = (tier: 'standard' | 'advanced') => {
+    if (tier === selectedTier) return;
+    setSelectedTier(tier);
+  };
+
   // --- Cascading Logic: tier selection drives which boards are shown ---
   useEffect(() => {
     const boards = availableBoards.filter((b) => {
@@ -560,7 +519,9 @@ function App() {
         className={`main-layout mode-viewport mode-phase-${modePhase} h-[calc(100vh-64px)] overflow-hidden`}
       >
         {activeMode === "Flux" ? (
-          <>
+          <div
+            className="flux-tier-surface"
+          >
             {/* ── Left Panel ── */}
             {showPanels && (
               <aside className="panel panel-left">
@@ -867,36 +828,32 @@ function App() {
             {activeMode === "Flux" && (
               <>
                 <div className="panel-section">
-                  <div className="flex flex-col gap-4 w-full mb-8">
-                    {/* Standard Button */}
-                    <div
-                      onClick={() => setSelectedTier('standard')}
-                      className={`w-full text-left p-5 rounded-xl border transition-all duration-300 relative overflow-hidden group cursor-pointer ${
-                        selectedTier === 'standard'
-                          ? 'bg-slate-800 border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
-                          : 'bg-transparent border-slate-700/50 hover:bg-slate-800/50 hover:border-slate-600'
-                      }`}
-                    >
-                      <h3 className="text-lg font-semibold tracking-wide text-slate-200 mb-1">Standard</h3>
-                      <p className="text-sm text-slate-400 leading-relaxed">
-                        Core A-Level Mathematics syllabus and structured topic questions.
-                      </p>
-                    </div>
+                  <div className="setting-group">
+                    <span className="setting-label">Tier</span>
+                    <div className="tier-selector">
+                      <button
+                        type="button"
+                        onClick={() => handleTierChange('standard')}
+                        className={`tier-tile ${selectedTier === 'standard' ? 'selected' : ''}`}
+                      >
+                        <span className="tier-tile-title">Standard</span>
+                        <span className="tier-tile-desc">
+                          Core A-Level syllabus and structured topic questions.
+                        </span>
+                      </button>
 
-                    {/* Advanced Button */}
-                    <div
-                      onClick={() => setSelectedTier('advanced')}
-                      className={`w-full text-left p-5 rounded-xl border transition-all duration-300 relative overflow-hidden group cursor-pointer ${
-                        selectedTier === 'advanced'
-                          ? 'bg-slate-800 border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
-                          : 'bg-transparent border-slate-700/50 hover:bg-slate-800/50 hover:border-slate-600'
-                      }`}
-                    >
-                      <h3 className="text-lg font-semibold tracking-wide text-slate-200 mb-1">Advanced</h3>
-                      <p className="text-sm text-slate-400 leading-relaxed">
-                        Further Mathematics, STEP, AEA, and hardcore extension challenges.
-                      </p>
+                      <button
+                        type="button"
+                        onClick={() => handleTierChange('advanced')}
+                        className={`tier-tile ${selectedTier === 'advanced' ? 'selected' : ''}`}
+                      >
+                        <span className="tier-tile-title">Advanced</span>
+                        <span className="tier-tile-desc">
+                          STEP, AEA, and hardcore extension challenges.
+                        </span>
+                      </button>
                     </div>
+                    <div className="tier-selector-divider" aria-hidden="true" />
                   </div>
                 </div>
 
@@ -922,7 +879,10 @@ function App() {
                   <div className="panel-section">
                     <div className="setting-group">
                       <span className="setting-label">Exam Board / Paper Type</span>
-                      <div className="subtopic-radio-list">
+                      <div
+                        key={selectedTier}
+                        className="subtopic-radio-list"
+                      >
                         {filteredBoards.map((b) => {
                           const isSelected = examBoard === b;
                           return (
@@ -947,7 +907,7 @@ function App() {
 
           </aside>
         )}
-          </>
+          </div>
         ) : (
           <Dashboard 
             mode={activeMode as "Fields" | "Forge"} 

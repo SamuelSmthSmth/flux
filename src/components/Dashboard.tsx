@@ -29,14 +29,6 @@ interface DashboardProps {
   setMode?: (mode: 'Fields' | 'Forge') => void;
 }
 
-type ForgeTabId = 'question' | 'solution' | 'discussion';
-
-const FORGE_TABS: { id: ForgeTabId; label: string }[] = [
-  { id: 'question', label: 'Question' },
-  { id: 'solution', label: 'The Solution' },
-  { id: 'discussion', label: 'Discussion' },
-];
-
 /** Helper to ensure block math renders correctly by adding newlines */
 const formatMathText = (text: string) => {
   return text
@@ -114,8 +106,6 @@ export default function Dashboard({ mode }: DashboardProps) {
   // --- UI state ---
   const [selectedItem, setSelectedItem] = useState<FieldDoc | ForgeDoc | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<ForgeTabId>('question');
-
   // --- Fetch on mount ---
   useEffect(() => {
     const fetchData = async () => {
@@ -159,7 +149,6 @@ export default function Dashboard({ mode }: DashboardProps) {
   useEffect(() => {
     setSelectedItem(null);
     setSearchQuery('');
-    setActiveTab('question');
   }, [mode]);
 
   // --- Active dataset ---
@@ -186,7 +175,6 @@ export default function Dashboard({ mode }: DashboardProps) {
 
   const handleSelectItem = (item: FieldDoc | ForgeDoc) => {
     setSelectedItem(item);
-    setActiveTab('question');
   };
 
   // ─── Loading State ────────────────────────────────────────────
