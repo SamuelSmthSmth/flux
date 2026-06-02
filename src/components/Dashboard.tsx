@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import ReactMarkdown from 'react-markdown';
@@ -35,6 +35,164 @@ const formatMathText = (text: string) => {
     .replace(/\$\$/g, '\n$$\n')
     .replace(/\n{3,}/g, '\n\n');
 };
+
+// ─── TOC Helpers ──────────────────────────────────────────────
+interface TocHeading {
+  id: string;
+  text: string;
+  level: number;
+}
+
+/** Convert a heading string into a URL-safe slug */
+const slugify = (text: string): string =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+
+/**
+ * Scan raw markdown strings for # headings and return a flat list.
+ * `sectionPrefixes` are prepended as level-2 entries (the hard-coded
+ * SectionHeading banners like "Formal Statement").
+ */
+function extractHeadings(
+  sections: { label: string; markdown: string }[]
+): TocHeading[] {
+  const headings: TocHeading[] = [];
+  for (const section of sections) {
+    // Add the section banner itself as a level-2 heading
+    headings.push({ id: `toc-${slugify(section.label)}`, text: section.label, level: 2 });
+    // Scan the markdown for sub-headings
+    const regex = /^(#{1,4})\s+(.+)$/gm;
+    let match;
+    while ((match = regex.exec(section.markdown)) !== null) {
+      const level = match[1].length;
+      const text = match[2].trim();
+      headings.push({ id: `toc-${slugify(section.label)}-${slugify(text)}`, text, level: Math.max(level, 3) });
+    }
+  }
+  return headings;
+}
+
+/**
+ * Build ReactMarkdown `components` overrides that inject `id` attrs
+ * on h1–h4 so the TOC can scroll to them.
+ */
+function markdownHeadingComponents(sectionSlug: string) {
+  const factory = (Tag: 'h1' | 'h2' | 'h3' | 'h4') =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function HeadingWithId(props: any) {
+      const text = String(props.children);
+      const id = `toc-${sectionSlug}-${slugify(text)}`;
+      return <Tag id={id} {...props} />;
+    };
+  return { h1: factory('h1'), h2: factory('h2'), h3: factory('h3'), h4: factory('h4') };
+}
+
+// ─── Table of Contents Component ──────────────────────────────
+function TableOfContents({
+  headings,
+  scrollContainer,
+}: {
+  headings: TocHeading[];
+  scrollContainer: React.RefObject<HTMLDivElement | null>;
+}) {
+  const [activeId, setActiveId] = useState<string>('');
+  const [popoverOpen, setPopoverOpen] = useState(false);
+
+  // --- Scroll spy via IntersectionObserver ---
+  useEffect(() => {
+    const container = scrollContainer.current;
+    if (!container || headings.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Find the topmost visible heading
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible.length > 0) {
+          setActiveId(visible[0].target.id);
+        }
+      },
+      {
+        root: container,
+        rootMargin: '-10% 0px -75% 0px',
+        threshold: 0,
+      }
+    );
+
+    // Observe all heading elements
+    for (const h of headings) {
+      const el = container.querySelector(`#${CSS.escape(h.id)}`);
+      if (el) observer.observe(el);
+    }
+
+    return () => observer.disconnect();
+  }, [headings, scrollContainer]);
+
+  const scrollTo = useCallback(
+    (id: string) => {
+      setActiveId(id);
+      setPopoverOpen(false);
+      const container = scrollContainer.current;
+      if (!container) return;
+      const el = container.querySelector(`#${CSS.escape(id)}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Brief highlight flash
+        el.classList.add('toc-flash');
+        setTimeout(() => el.classList.remove('toc-flash'), 1200);
+      }
+    },
+    [scrollContainer]
+  );
+
+  if (headings.length === 0) return null;
+
+  const tocList = (
+    <ul className="toc-list">
+      {headings.map((h) => (
+        <li
+          key={h.id}
+          className={`toc-item toc-level-${h.level} ${activeId === h.id ? 'toc-active' : ''}`}
+        >
+          <button onClick={() => scrollTo(h.id)} type="button">
+            {h.text}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+
+  return (
+    <>
+      {/* Desktop rail */}
+      <nav className="toc-rail" aria-label="Table of contents">
+        <span className="toc-rail-title">On this page</span>
+        {tocList}
+      </nav>
+
+      {/* Floating button (tablet) */}
+      <div className="toc-floating">
+        <button
+          className="toc-floating-btn"
+          onClick={() => setPopoverOpen((o) => !o)}
+          type="button"
+          aria-label="Table of contents"
+        >
+          §
+        </button>
+        {popoverOpen && (
+          <div className="toc-popover">
+            <span className="toc-popover-title">On this page</span>
+            {tocList}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
 
 // ─── Carousel Grouping Helper ─────────────────────────────────
 function groupByCategory<T extends { carousel_category: string }>(
@@ -106,6 +264,7 @@ export default function Dashboard({ mode }: DashboardProps) {
   // --- UI state ---
   const [selectedItem, setSelectedItem] = useState<FieldDoc | ForgeDoc | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const detailBodyRef = useRef<HTMLDivElement>(null);
   // --- Fetch on mount ---
   useEffect(() => {
     const fetchData = async () => {
@@ -341,12 +500,12 @@ export default function Dashboard({ mode }: DashboardProps) {
               </button>
             </div>
 
-            <div className="dashboard-detail-body">
+            <div className="dashboard-detail-body" ref={detailBodyRef}>
               <div className="dashboard-detail-content" key={selectedItem.id}>
                 {mode === 'Fields' ? (
-                  <FieldsDetail item={selectedItem as FieldDoc} />
+                  <FieldsDetail item={selectedItem as FieldDoc} scrollRef={detailBodyRef} />
                 ) : (
-                  <ForgeDetail item={selectedItem as ForgeDoc} />
+                  <ForgeDetail item={selectedItem as ForgeDoc} scrollRef={detailBodyRef} />
                 )}
               </div>
             </div>
@@ -358,9 +517,9 @@ export default function Dashboard({ mode }: DashboardProps) {
 }
 
 // ─── Reusable Detail Heading ──────────────────────────────────
-function SectionHeading({ title }: { title: string }) {
+function SectionHeading({ title, id }: { title: string; id?: string }) {
   return (
-    <div className="flex items-center w-full mt-24 mb-12 opacity-80">
+    <div id={id} className="flex items-center w-full mt-24 mb-12 opacity-80 scroll-mt-4">
       <div className="h-px bg-gradient-to-r from-transparent via-slate-600 to-transparent flex-1"></div>
       <h2 className="text-2xl md:text-3xl font-bold tracking-[0.2em] uppercase text-slate-200 px-8 text-center">{title}</h2>
       <div className="h-px bg-gradient-to-r from-transparent via-slate-600 to-transparent flex-1"></div>
@@ -369,124 +528,172 @@ function SectionHeading({ title }: { title: string }) {
 }
 
 // ─── Fields Detail Pane ───────────────────────────────────────
-function FieldsDetail({ item }: { item: FieldDoc }) {
+function FieldsDetail({ item, scrollRef }: { item: FieldDoc; scrollRef: React.RefObject<HTMLDivElement | null> }) {
+  const sections = useMemo(() => {
+    const s: { label: string; markdown: string }[] = [];
+    if (item.formal_statement) s.push({ label: 'Formal Statement', markdown: item.formal_statement });
+    if (item.rigorous_proof) s.push({ label: 'Rigorous Proof', markdown: item.rigorous_proof });
+    if (item.geogebra) s.push({ label: 'GeoGebra Sandbox', markdown: '' });
+    return s;
+  }, [item]);
+
+  const headings = useMemo(() => extractHeadings(sections), [sections]);
+
   return (
-    <div className="dashboard-fields-content flex flex-col gap-y-8 pb-32">
-      {/* Formal Statement */}
-      {item.formal_statement && (
-        <div className="flex flex-col">
-          <SectionHeading title="Formal Statement" />
-          <div className="dashboard-markdown text-lg leading-relaxed">
-            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-              {formatMathText(item.formal_statement)}
-            </ReactMarkdown>
-          </div>
-        </div>
-      )}
-
-      {/* Rigorous Proof */}
-      {item.rigorous_proof && (
-        <div className="flex flex-col">
-          <SectionHeading title="Rigorous Proof" />
-          <div className="dashboard-markdown text-lg leading-relaxed">
-            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-              {formatMathText(item.rigorous_proof)}
-            </ReactMarkdown>
-          </div>
-        </div>
-      )}
-
-      {/* GeoGebra Sandbox */}
-      {item.geogebra && (
-        <div className="dashboard-sandbox mt-12">
-          <div className="dashboard-sandbox-header">
-            <span className="dashboard-sandbox-label">GeoGebra Interactive Sandbox</span>
-            <div className="dashboard-sandbox-dots">
-              <span /><span /><span />
+    <div className="dashboard-detail-with-toc">
+      <div className="dashboard-fields-content flex flex-col gap-y-8 pb-32">
+        {/* Formal Statement */}
+        {item.formal_statement && (
+          <div className="flex flex-col">
+            <SectionHeading title="Formal Statement" id={`toc-${slugify('Formal Statement')}`} />
+            <div className="dashboard-markdown text-lg leading-relaxed">
+              <ReactMarkdown
+                remarkPlugins={[remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+                components={markdownHeadingComponents(slugify('Formal Statement'))}
+              >
+                {formatMathText(item.formal_statement)}
+              </ReactMarkdown>
             </div>
           </div>
-          <div className="dashboard-sandbox-body">
-            <div className="dashboard-sandbox-grid" aria-hidden="true" />
-            <div
-              className="dashboard-sandbox-placeholder"
-              style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', fontSize: '0.78rem', textAlign: 'left', maxWidth: '100%', overflow: 'auto' }}
-            >
-              {item.geogebra}
+        )}
+
+        {/* Rigorous Proof */}
+        {item.rigorous_proof && (
+          <div className="flex flex-col">
+            <SectionHeading title="Rigorous Proof" id={`toc-${slugify('Rigorous Proof')}`} />
+            <div className="dashboard-markdown text-lg leading-relaxed">
+              <ReactMarkdown
+                remarkPlugins={[remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+                components={markdownHeadingComponents(slugify('Rigorous Proof'))}
+              >
+                {formatMathText(item.rigorous_proof)}
+              </ReactMarkdown>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Fallback if nothing is present */}
-      {!item.formal_statement && !item.rigorous_proof && !item.geogebra && (
-        <div className="center-content" style={{ padding: '40px 0' }}>
-          <p className="center-subtitle">No content available for this field entry.</p>
-        </div>
-      )}
+        {/* GeoGebra Sandbox */}
+        {item.geogebra && (
+          <div className="dashboard-sandbox mt-12" id={`toc-${slugify('GeoGebra Sandbox')}`}>
+            <div className="dashboard-sandbox-header">
+              <span className="dashboard-sandbox-label">GeoGebra Interactive Sandbox</span>
+              <div className="dashboard-sandbox-dots">
+                <span /><span /><span />
+              </div>
+            </div>
+            <div className="dashboard-sandbox-body">
+              <div className="dashboard-sandbox-grid" aria-hidden="true" />
+              <div
+                className="dashboard-sandbox-placeholder"
+                style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', fontSize: '0.78rem', textAlign: 'left', maxWidth: '100%', overflow: 'auto' }}
+              >
+                {item.geogebra}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Fallback if nothing is present */}
+        {!item.formal_statement && !item.rigorous_proof && !item.geogebra && (
+          <div className="center-content" style={{ padding: '40px 0' }}>
+            <p className="center-subtitle">No content available for this field entry.</p>
+          </div>
+        )}
+      </div>
+
+      <TableOfContents headings={headings} scrollContainer={scrollRef} />
     </div>
   );
 }
 
 // ─── Forge Detail Pane ────────────────────────────────────────
-function ForgeDetail({ item }: { item: ForgeDoc }) {
+function ForgeDetail({ item, scrollRef }: { item: ForgeDoc; scrollRef: React.RefObject<HTMLDivElement | null> }) {
+  const sections = useMemo(() => {
+    const s: { label: string; markdown: string }[] = [];
+    if (item.question) s.push({ label: 'Question', markdown: item.question });
+    if (item.solution) s.push({ label: 'The Solution', markdown: item.solution });
+    if (item.discussion) s.push({ label: 'Discussion', markdown: item.discussion });
+    return s;
+  }, [item]);
+
+  const headings = useMemo(() => extractHeadings(sections), [sections]);
+
   return (
-    <div className="dashboard-forge-content flex flex-col gap-y-8 pb-32">
-      {/* Question */}
-      {item.question && (
-        <div className="flex flex-col">
-          <SectionHeading title="Question" />
-          <div className="dashboard-markdown text-lg leading-relaxed">
-            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-              {formatMathText(item.question)}
-            </ReactMarkdown>
-          </div>
-        </div>
-      )}
-
-      {/* The Solution */}
-      {item.solution && (
-        <div className="flex flex-col">
-          <SectionHeading title="The Solution" />
-          <div className="relative group">
-            <div className="absolute inset-0 flex items-center justify-center z-10 opacity-100 transition-opacity duration-300 group-hover:opacity-0 pointer-events-none">
-              <span className="bg-slate-800/80 text-slate-300 px-4 py-2 rounded-full backdrop-blur-sm tracking-widest text-xs uppercase border border-slate-700">
-                Hover to reveal
-              </span>
-            </div>
-            <div className="dashboard-markdown text-lg leading-relaxed blur-md transition-all duration-500 ease-out group-hover:blur-none">
-              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                {formatMathText(item.solution)}
+    <div className="dashboard-detail-with-toc">
+      <div className="dashboard-forge-content flex flex-col gap-y-8 pb-32">
+        {/* Question */}
+        {item.question && (
+          <div className="flex flex-col">
+            <SectionHeading title="Question" id={`toc-${slugify('Question')}`} />
+            <div className="dashboard-markdown text-lg leading-relaxed">
+              <ReactMarkdown
+                remarkPlugins={[remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+                components={markdownHeadingComponents(slugify('Question'))}
+              >
+                {formatMathText(item.question)}
               </ReactMarkdown>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Discussion */}
-      {item.discussion && (
-        <div className="flex flex-col">
-          <SectionHeading title="Discussion" />
-          <div className="relative group">
-            <div className="absolute inset-0 flex items-center justify-center z-10 opacity-100 transition-opacity duration-300 group-hover:opacity-0 pointer-events-none">
-              <span className="bg-slate-800/80 text-slate-300 px-4 py-2 rounded-full backdrop-blur-sm tracking-widest text-xs uppercase border border-slate-700">
-                Hover to reveal
-              </span>
-            </div>
-            <div className="dashboard-markdown text-lg leading-relaxed blur-md transition-all duration-500 ease-out group-hover:blur-none">
-              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                {formatMathText(item.discussion)}
-              </ReactMarkdown>
+        {/* The Solution */}
+        {item.solution && (
+          <div className="flex flex-col">
+            <SectionHeading title="The Solution" id={`toc-${slugify('The Solution')}`} />
+            <div className="relative group">
+              <div className="absolute inset-0 flex items-center justify-center z-10 opacity-100 transition-opacity duration-300 group-hover:opacity-0 pointer-events-none">
+                <span className="bg-slate-800/80 text-slate-300 px-4 py-2 rounded-full backdrop-blur-sm tracking-widest text-xs uppercase border border-slate-700">
+                  Hover to reveal
+                </span>
+              </div>
+              <div className="dashboard-markdown text-lg leading-relaxed blur-md transition-all duration-500 ease-out group-hover:blur-none">
+                <ReactMarkdown
+                  remarkPlugins={[remarkMath]}
+                  rehypePlugins={[rehypeKatex]}
+                  components={markdownHeadingComponents(slugify('The Solution'))}
+                >
+                  {formatMathText(item.solution)}
+                </ReactMarkdown>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Fallback if nothing is present */}
-      {!item.question && !item.solution && !item.discussion && (
-        <div className="center-content" style={{ padding: '40px 0' }}>
-          <p className="center-subtitle">No content available for this forge entry.</p>
-        </div>
-      )}
+        {/* Discussion */}
+        {item.discussion && (
+          <div className="flex flex-col">
+            <SectionHeading title="Discussion" id={`toc-${slugify('Discussion')}`} />
+            <div className="relative group">
+              <div className="absolute inset-0 flex items-center justify-center z-10 opacity-100 transition-opacity duration-300 group-hover:opacity-0 pointer-events-none">
+                <span className="bg-slate-800/80 text-slate-300 px-4 py-2 rounded-full backdrop-blur-sm tracking-widest text-xs uppercase border border-slate-700">
+                  Hover to reveal
+                </span>
+              </div>
+              <div className="dashboard-markdown text-lg leading-relaxed blur-md transition-all duration-500 ease-out group-hover:blur-none">
+                <ReactMarkdown
+                  remarkPlugins={[remarkMath]}
+                  rehypePlugins={[rehypeKatex]}
+                  components={markdownHeadingComponents(slugify('Discussion'))}
+                >
+                  {formatMathText(item.discussion)}
+                </ReactMarkdown>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Fallback if nothing is present */}
+        {!item.question && !item.solution && !item.discussion && (
+          <div className="center-content" style={{ padding: '40px 0' }}>
+            <p className="center-subtitle">No content available for this forge entry.</p>
+          </div>
+        )}
+      </div>
+
+      <TableOfContents headings={headings} scrollContainer={scrollRef} />
     </div>
   );
 }
