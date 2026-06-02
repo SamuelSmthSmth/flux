@@ -65,30 +65,31 @@ const INTRO_DURATION_MS = 1000;
 const MODE_SWITCH_OUT_MS = INTRO_DURATION_MS / 2;
 const MODE_SWITCH_IN_MS = INTRO_DURATION_MS / 2;
 
-// EXAM_BOARDS is now loaded dynamically from Firestore metadata_index.
-// Kept as a fallback if the database fetch fails.
-const EXAM_BOARDS_FALLBACK = [
-  "Edexcel",
-  "Edexcel IAL",
-  "AQA",
-  "OCR",
-  "MEI",
-  "TMUA",
-  "STEP",
-  "AEA",
-] as const;
+// ─── Exam Board / Sub-Board Mapping ───────────────────────────
+interface ExamContext {
+  board: string;
+  subBoard: string;
+}
 
-// Boards classified as "Standard" (e.g. Edexcel, AQA, OCR, MEI).
-// Everything not in this set is treated as an advanced / competition board.
-const STANDARD_BOARDS = new Set([
-  "Edexcel",
-  "Edexcel IAL", 
-  "AQA", 
-  "OCR",
-  "MEI"
-]);
+interface ExamOption {
+  label: string;
+  board: string;
+  subBoard: string;
+}
 
-const PHYSICS_ONLY_BOARDS = new Set(["PAT", "ESAT"]);
+const standardOptions: ExamOption[] = [
+  { label: 'Edexcel', board: 'Edexcel', subBoard: 'A-Level' },
+  { label: 'Edexcel IAL', board: 'Edexcel', subBoard: 'IAL' },
+  { label: 'OCR', board: 'OCR', subBoard: 'A-Level' },
+  { label: 'OCR MEI', board: 'OCR', subBoard: 'MEI' },
+];
+
+const advancedOptions: ExamOption[] = [
+  { label: 'AEA', board: 'Edexcel', subBoard: 'AEA' },
+  { label: 'MAT', board: 'Oxford', subBoard: 'MAT' },
+  { label: 'MadAsMaths SP', board: 'MadAsMaths', subBoard: 'SP' },
+  { label: 'MadAsMaths SPX', board: 'MadAsMaths', subBoard: 'SPX' },
+];
 
 // ─── Reusable Components ──────────────────────────────────────
 
@@ -268,7 +269,10 @@ function App() {
 
   // --- Right panel: shared ---
   const [selectedTier, setSelectedTier] = useState<'standard' | 'advanced'>('standard');
-  const [examBoard, setExamBoard] = useState("Edexcel");
+  const [selectedExamContext, setSelectedExamContext] = useState<ExamContext>({
+    board: standardOptions[0].board,
+    subBoard: standardOptions[0].subBoard,
+  });
 
   // --- Firestore metadata-driven filter state ---
   const { metadata, loading: metadataLoading, error: metadataError } = useMetadataIndex();
@@ -284,19 +288,10 @@ function App() {
   // Reset subtopics when topic or board changes
   useEffect(() => {
     setSelectedDbSubtopics([]);
-  }, [selectedDbTopic, examBoard]);
+  }, [selectedDbTopic, selectedExamContext]);
 
-
-  // Derive available boards from metadata (with fallback)
-  const availableBoards = metadata?.boards ?? [...EXAM_BOARDS_FALLBACK];
-
-  // Filter boards by the current tier selection
-  const filteredBoards = availableBoards.filter((b) => {
-    const matchesTier = selectedTier === 'advanced'
-      ? !STANDARD_BOARDS.has(b)
-      : STANDARD_BOARDS.has(b);
-    return matchesTier && !PHYSICS_ONLY_BOARDS.has(b);
-  });
+  // Active exam board options based on tier
+  const activeExamOptions = selectedTier === 'advanced' ? advancedOptions : standardOptions;
 
 
   // Filter topics & subtopics by the search query
@@ -305,7 +300,7 @@ function App() {
     
     let boardFilters = metadata.topics;
     if (metadata.activeFilters) {
-      boardFilters = metadata.activeFilters[examBoard];
+      boardFilters = metadata.activeFilters[selectedExamContext.board];
       if (!boardFilters) return {}; // Board has no questions
     }
 
@@ -328,7 +323,7 @@ function App() {
       }
     }
     return result;
-  }, [metadata, searchQuery, examBoard]);
+  }, [metadata, searchQuery, selectedExamContext]);
 
   const handleSubtopicToggle = (subtopic: string) => {
     if (activeMode === "Flux") {
@@ -392,20 +387,10 @@ function App() {
   const handleTierChange = (tier: 'standard' | 'advanced') => {
     if (tier === selectedTier) return;
     setSelectedTier(tier);
+    // Auto-set exam context to first option in the new tier
+    const firstOption = tier === 'advanced' ? advancedOptions[0] : standardOptions[0];
+    setSelectedExamContext({ board: firstOption.board, subBoard: firstOption.subBoard });
   };
-
-  // --- Cascading Logic: tier selection drives which boards are shown ---
-  useEffect(() => {
-    const boards = availableBoards.filter((b) => {
-      const matchesTier = selectedTier === 'advanced'
-        ? !STANDARD_BOARDS.has(b)
-        : STANDARD_BOARDS.has(b);
-      return matchesTier && !PHYSICS_ONLY_BOARDS.has(b);
-    });
-    if (boards.length > 0 && !boards.includes(examBoard)) {
-      setExamBoard(boards[0]);
-    }
-  }, [selectedTier, availableBoards]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Action handlers ---
   const handleExitActive = () => {
@@ -419,9 +404,9 @@ function App() {
     try {
       const qConstraints: any[] = [];
       
-      qConstraints.push(where("board", "==", examBoard));
+      qConstraints.push(where("board", "==", selectedExamContext.board));
+      qConstraints.push(where("sub_board", "==", selectedExamContext.subBoard));
       qConstraints.push(where("topic", "==", selectedDbTopic));
-      qConstraints.push(where("difficulty", "==", selectedTier === 'standard' ? 'Standard' : 'Advanced'));
       
       if (selectedDbSubtopics.length > 0) {
         if (selectedDbSubtopics.length === 1) {
@@ -723,7 +708,7 @@ function App() {
                       Generated Questions
                     </h2>
                     <p className="paper-viewer-meta">
-                      {questionsList.length} {questionsList.length === 1 ? "question" : "questions"} • Mathematics • {examBoard} • {selectedDbTopic || "All Topics"}{selectedDbSubtopics.length > 0 ? ` (${selectedDbSubtopics.map(st => st === "" ? "General" : st).join(", ")})` : ""} • {selectedTier === 'standard' ? 'Standard' : 'Advanced'}
+                      {questionsList.length} {questionsList.length === 1 ? "question" : "questions"} • {activeExamOptions.find(o => o.board === selectedExamContext.board && o.subBoard === selectedExamContext.subBoard)?.label ?? selectedExamContext.board} • {selectedDbTopic || "All Topics"}{selectedDbSubtopics.length > 0 ? ` (${selectedDbSubtopics.map(st => st === "" ? "General" : st).join(", ")})` : ""} • {selectedTier === 'standard' ? 'Standard' : 'Advanced'}
                     </p>
                   </div>
                   <button
@@ -882,18 +867,25 @@ function App() {
                         key={selectedTier}
                         className="subtopic-radio-list"
                       >
-                        {filteredBoards.map((b) => {
-                          const isSelected = examBoard === b;
+                        {activeExamOptions.map((opt) => {
+                          const isSelected =
+                            selectedExamContext.board === opt.board &&
+                            selectedExamContext.subBoard === opt.subBoard;
                           return (
                             <div
-                              key={b}
+                              key={opt.label}
                               className={`subtopic-radio-item ${isSelected ? "selected" : ""}`}
-                              onClick={() => setExamBoard(b)}
+                              onClick={() =>
+                                setSelectedExamContext({
+                                  board: opt.board,
+                                  subBoard: opt.subBoard,
+                                })
+                              }
                             >
                               <div className="radio-circle">
                                 <div className="radio-dot" />
                               </div>
-                              <span className="subtopic-radio-label">{b}</span>
+                              <span className="subtopic-radio-label">{opt.label}</span>
                             </div>
                           );
                         })}
