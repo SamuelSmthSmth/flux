@@ -405,7 +405,7 @@ function App() {
       const qConstraints: any[] = [];
       
       qConstraints.push(where("board", "==", selectedExamContext.board));
-      qConstraints.push(where("sub_board", "==", selectedExamContext.subBoard));
+      qConstraints.push(where("subBoard", "==", selectedExamContext.subBoard));
       qConstraints.push(where("topic", "==", selectedDbTopic));
       
       if (selectedDbSubtopics.length > 0) {
@@ -417,7 +417,7 @@ function App() {
       }
 
       const q = query(
-        collection(db, "questions"),
+        collection(db, "flux"),
         ...qConstraints,
         limit(10)
       );
