@@ -32,8 +32,14 @@ interface DashboardProps {
 
 /** Helper to ensure block math renders correctly by adding newlines */
 const formatMathText = (text: string) => {
+  // Ensure display math blocks ($$...$$) are on their own lines
+  // surrounded by blank lines so remark-math treats them as display math.
   return text
-    .replace(/\$\$/g, '\n$$\n')
+    // Match paired $$...$$ (non-greedy) and ensure proper block formatting
+    .replace(/\$\$([\s\S]*?)\$\$/g, (_match, content) => {
+      const trimmed = content.trim();
+      return `\n\n$$\n${trimmed}\n$$\n\n`;
+    })
     .replace(/\n{3,}/g, '\n\n');
 };
 
@@ -75,41 +81,80 @@ function extractHeadings(
   return headings;
 }
 
-/**
- * Build ReactMarkdown `components` overrides that inject `id` attrs
- * on headings so the TOC can scroll to them.
- */
-function markdownHeadingComponents(sectionSlug: string) {
-  const factory = (Tag: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6') =>
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+function customMarkdownComponents(sectionSlug: string) {
+  const extractText = (node: any): string => {
+    if (typeof node === 'string') return node;
+    if (typeof node === 'number') return String(node);
+    if (Array.isArray(node)) return node.map(extractText).join('');
+    if (node && node.props && node.props.children) return extractText(node.props.children);
+    return '';
+  };
+
+  const HeadingFactory = (Tag: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6') =>
     function HeadingWithId(props: any) {
-      const extractText = (node: any): string => {
-        if (typeof node === 'string') return node;
-        if (typeof node === 'number') return String(node);
-        if (Array.isArray(node)) return node.map(extractText).join('');
-        if (node && node.props && node.props.children) return extractText(node.props.children);
-        return '';
-      };
-      
       const text = extractText(props.children);
       const id = `toc-${sectionSlug}-${slugify(text)}`;
-      
-      if (Tag === 'h1' || Tag === 'h2' || Tag === 'h3') {
-        return <SectionHeading title={props.children} id={id} level={3} />;
+      const { node, children, ...rest } = props;
+
+      // Main headings — big, gradient, decorative underline via CSS
+      if (Tag === 'h1' || Tag === 'h2') {
+        return (
+          <h2 id={id} className="md-heading-main text-4xl md:text-5xl text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-amber-500 dark:from-orange-400 dark:to-amber-300" {...rest}>
+            {children}
+          </h2>
+        );
       }
+      // Subheadings — medium, solid color, thinner decorative underline
+      if (Tag === 'h3') {
+        return (
+          <h3 id={id} className="md-heading-sub text-3xl md:text-4xl text-slate-900 dark:text-slate-100" {...rest}>
+            {children}
+          </h3>
+        );
+      }
+      // Minor headings — smaller, no underline
       if (Tag === 'h4' || Tag === 'h5' || Tag === 'h6') {
-        return <SectionHeading title={props.children} id={id} level={4} />;
+        return (
+          <h4 id={id} className="md-heading-minor text-2xl md:text-3xl text-slate-800 dark:text-slate-200" {...rest}>
+            {children}
+          </h4>
+        );
       }
-      return React.createElement(Tag, { id, ...props });
+      return React.createElement(Tag, { id, ...rest }, children);
     };
-    
-  return { 
-    h1: factory('h1'), 
-    h2: factory('h2'), 
-    h3: factory('h3'), 
-    h4: factory('h4'),
-    h5: factory('h5'),
-    h6: factory('h6')
+
+  return {
+    h1: HeadingFactory('h1'),
+    h2: HeadingFactory('h2'),
+    h3: HeadingFactory('h3'),
+    h4: HeadingFactory('h4'),
+    h5: HeadingFactory('h5'),
+    h6: HeadingFactory('h6'),
+    blockquote: ({ node, ...props }: any) => (
+      <blockquote
+        className="border-l-4 border-amber-500 bg-gradient-to-r from-amber-50 to-transparent dark:from-amber-900/15 dark:to-transparent px-6 py-5 rounded-r-xl my-10 shadow-sm"
+        style={{ fontFamily: "'Kalam', cursive" }}
+        {...props}
+      />
+    ),
+    strong: ({ node, ...props }: any) => (
+      <strong className="font-bold text-amber-700 dark:text-amber-400" {...props} />
+    ),
+    p: ({ node, ...props }: any) => (
+      <p className="leading-[2] text-xl text-slate-900 dark:text-slate-300 mb-7" style={{ fontFamily: "'Kalam', cursive" }} {...props} />
+    ),
+    ul: ({ node, ...props }: any) => (
+      <ul className="list-disc list-inside sm:list-outside sm:ml-6 mb-8 text-xl text-slate-900 dark:text-slate-300 space-y-3" style={{ fontFamily: "'Kalam', cursive" }} {...props} />
+    ),
+    ol: ({ node, ...props }: any) => (
+      <ol className="list-decimal list-inside sm:list-outside sm:ml-6 mb-8 text-xl text-slate-900 dark:text-slate-300 space-y-3" style={{ fontFamily: "'Kalam', cursive" }} {...props} />
+    ),
+    pre: ({ node, ...props }: any) => (
+      <pre className="overflow-x-auto my-10 p-6 bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800" style={{ fontFamily: "monospace" }} {...props} />
+    ),
+    li: ({ node, ...props }: any) => (
+      <li className="leading-[2]" {...props} />
+    )
   };
 }
 
@@ -580,11 +625,11 @@ function FieldsDetail({ item, scrollRef }: { item: FieldDoc; scrollRef: React.Re
       <div className="dashboard-fields-content flex flex-col gap-y-8 pb-32">
         {item.markdown ? (
           <div className="flex flex-col">
-            <div className="dashboard-markdown text-lg leading-relaxed">
+            <div className="dashboard-markdown w-full max-w-4xl mx-auto">
               <ReactMarkdown
                 remarkPlugins={[remarkMath]}
                 rehypePlugins={[rehypeKatex]}
-                components={markdownHeadingComponents(slugify('Field'))}
+                components={customMarkdownComponents(slugify('Field'))}
               >
                 {formatMathText(item.markdown)}
               </ReactMarkdown>
@@ -596,11 +641,11 @@ function FieldsDetail({ item, scrollRef }: { item: FieldDoc; scrollRef: React.Re
             {item.formal_statement && (
               <div className="flex flex-col">
                 <SectionHeading title="Formal Statement" id={`toc-${slugify('Formal Statement')}`} />
-                <div className="dashboard-markdown text-lg leading-relaxed">
+                <div className="dashboard-markdown w-full max-w-4xl mx-auto">
                   <ReactMarkdown
                     remarkPlugins={[remarkMath]}
                     rehypePlugins={[rehypeKatex]}
-                    components={markdownHeadingComponents(slugify('Formal Statement'))}
+                    components={customMarkdownComponents(slugify('Formal Statement'))}
                   >
                     {formatMathText(item.formal_statement)}
                   </ReactMarkdown>
@@ -612,11 +657,11 @@ function FieldsDetail({ item, scrollRef }: { item: FieldDoc; scrollRef: React.Re
             {item.rigorous_proof && (
               <div className="flex flex-col">
                 <SectionHeading title="Rigorous Proof" id={`toc-${slugify('Rigorous Proof')}`} />
-                <div className="dashboard-markdown text-lg leading-relaxed">
+                <div className="dashboard-markdown w-full max-w-4xl mx-auto">
                   <ReactMarkdown
                     remarkPlugins={[remarkMath]}
                     rehypePlugins={[rehypeKatex]}
-                    components={markdownHeadingComponents(slugify('Rigorous Proof'))}
+                    components={customMarkdownComponents(slugify('Rigorous Proof'))}
                   >
                     {formatMathText(item.rigorous_proof)}
                   </ReactMarkdown>
@@ -679,11 +724,11 @@ function ForgeDetail({ item, scrollRef }: { item: ForgeDoc; scrollRef: React.Ref
         {item.question && (
           <div className="flex flex-col">
             <SectionHeading title="Question" id={`toc-${slugify('Question')}`} />
-            <div className="dashboard-markdown text-lg leading-relaxed">
+            <div className="dashboard-markdown w-full max-w-4xl mx-auto">
               <ReactMarkdown
                 remarkPlugins={[remarkMath]}
                 rehypePlugins={[rehypeKatex]}
-                components={markdownHeadingComponents(slugify('Question'))}
+                components={customMarkdownComponents(slugify('Question'))}
               >
                 {formatMathText(item.question)}
               </ReactMarkdown>
@@ -705,7 +750,7 @@ function ForgeDetail({ item, scrollRef }: { item: ForgeDoc; scrollRef: React.Ref
                 <ReactMarkdown
                   remarkPlugins={[remarkMath]}
                   rehypePlugins={[rehypeKatex]}
-                  components={markdownHeadingComponents(slugify('The Solution'))}
+                  components={customMarkdownComponents(slugify('The Solution'))}
                 >
                   {formatMathText(item.solution)}
                 </ReactMarkdown>
@@ -728,7 +773,7 @@ function ForgeDetail({ item, scrollRef }: { item: ForgeDoc; scrollRef: React.Ref
                 <ReactMarkdown
                   remarkPlugins={[remarkMath]}
                   rehypePlugins={[rehypeKatex]}
-                  components={markdownHeadingComponents(slugify('Discussion'))}
+                  components={customMarkdownComponents(slugify('Discussion'))}
                 >
                   {formatMathText(item.discussion)}
                 </ReactMarkdown>
