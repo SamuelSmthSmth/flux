@@ -67,15 +67,19 @@ function extractHeadings(
 ): TocHeading[] {
   const headings: TocHeading[] = [];
   for (const section of sections) {
-    // Add the section banner itself as a level-2 heading
-    headings.push({ id: `toc-${slugify(section.label)}`, text: section.label, level: 2 });
+    // Add the section banner itself as a level-2 heading, unless it's the generic "Field"
+    if (section.label !== 'Field') {
+      headings.push({ id: `toc-${slugify(section.label)}`, text: section.label, level: 2 });
+    }
     // Scan the markdown for sub-headings
     const regex = /^(#{1,4})\s+(.+)$/gm;
     let match;
     while ((match = regex.exec(section.markdown)) !== null) {
       const level = match[1].length;
-      const text = match[2].trim();
-      headings.push({ id: `toc-${slugify(section.label)}-${slugify(text)}`, text, level: Math.max(level, 3) });
+      let text = match[2].trim();
+      // Strip basic markdown bold/italic tags for cleaner TOC display
+      text = text.replace(/\*\*/g, '').replace(/__/g, '').trim();
+      headings.push({ id: `toc-${slugify(section.label)}-${slugify(match[2].trim())}`, text, level: Math.max(level, 3) });
     }
   }
   return headings;
