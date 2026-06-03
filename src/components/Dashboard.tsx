@@ -136,7 +136,7 @@ function customMarkdownComponents(sectionSlug: string) {
     h6: HeadingFactory('h6'),
     blockquote: ({ node, ...props }: any) => (
       <blockquote
-        className="border-l-4 border-amber-500 bg-gradient-to-r from-amber-50 to-transparent dark:from-amber-900/15 dark:to-transparent px-6 py-5 rounded-r-xl my-10 shadow-sm"
+        className="border-l-4 border-amber-500 bg-gradient-to-r from-amber-50 to-transparent dark:from-amber-900/15 dark:to-transparent px-6 py-5 rounded-r-xl my-10 shadow-sm text-black dark:text-slate-300"
         style={{ fontFamily: "'Kalam', cursive" }}
         {...props}
       />
@@ -145,13 +145,13 @@ function customMarkdownComponents(sectionSlug: string) {
       <strong className="font-bold text-amber-700 dark:text-amber-400" {...props} />
     ),
     p: ({ node, ...props }: any) => (
-      <p className="leading-[2] text-xl text-slate-900 dark:text-slate-300 mb-7" style={{ fontFamily: "'Kalam', cursive" }} {...props} />
+      <p className="leading-relaxed text-xl text-slate-900 dark:text-slate-200 mb-6 font-medium" {...props} />
     ),
     ul: ({ node, ...props }: any) => (
-      <ul className="list-disc list-inside sm:list-outside sm:ml-6 mb-8 text-xl text-slate-900 dark:text-slate-300 space-y-3" style={{ fontFamily: "'Kalam', cursive" }} {...props} />
+      <ul className="list-disc list-inside sm:list-outside sm:ml-6 mb-6 text-xl text-slate-900 dark:text-slate-200 space-y-2 font-medium" {...props} />
     ),
     ol: ({ node, ...props }: any) => (
-      <ol className="list-decimal list-inside sm:list-outside sm:ml-6 mb-8 text-xl text-slate-900 dark:text-slate-300 space-y-3" style={{ fontFamily: "'Kalam', cursive" }} {...props} />
+      <ol className="list-decimal list-inside sm:list-outside sm:ml-6 mb-6 text-xl text-slate-900 dark:text-slate-200 space-y-2 font-medium" {...props} />
     ),
     pre: ({ node, ...props }: any) => (
       <pre className="overflow-x-auto my-10 p-6 bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800" style={{ fontFamily: "monospace" }} {...props} />

@@ -2,6 +2,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Kalam:wght@300;400;700&display=swap');
 @import "tailwindcss";
 
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* ========================================
    MISTY — Global Design Tokens & Resets
    Gemini-inspired premium aesthetic
