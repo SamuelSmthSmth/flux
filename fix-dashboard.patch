@@ -1,0 +1,39 @@
+--- src/components/Dashboard.tsx
++++ src/components/Dashboard.tsx
+@@ -75,7 +75,7 @@
+ }
+ 
+ // ─── Reusable Detail Heading ──────────────────────────────────
+-function SectionHeading({ title, id, level = 3 }: { title: string; id?: string; level?: number }) {
++function SectionHeading({ title, id, level = 3 }: { title: React.ReactNode; id?: string; level?: number }) {
+   if (level === 4) {
+     return (
+       <div id={id} className="flex items-center w-full mt-16 mb-8 opacity-80 scroll-mt-4">
+@@ -102,15 +102,19 @@
+     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     function HeadingWithId(props: any) {
+-      const text = String(props.children);
++      // To generate a clean ID, extract text from children
++      const extractText = (node: any): string => {
++        if (typeof node === 'string') return node;
++        if (typeof node === 'number') return String(node);
++        if (Array.isArray(node)) return node.map(extractText).join('');
++        if (node && node.props && node.props.children) return extractText(node.props.children);
++        return '';
++      };
++      const text = extractText(props.children);
+       const id = `toc-${sectionSlug}-${slugify(text)}`;
+       
+-      if (Tag === 'h3') {
+-        return <SectionHeading title={text} id={id} level={3} />;
+-      }
+-      if (Tag === 'h4') {
+-        return <SectionHeading title={text} id={id} level={4} />;
++      if (Tag === 'h1' || Tag === 'h2' || Tag === 'h3') {
++        return <SectionHeading title={props.children} id={id} level={3} />;
++      }
++      if (Tag === 'h4' || Tag === 'h5' || Tag === 'h6') {
++        return <SectionHeading title={props.children} id={id} level={4} />;
+       }
+       return <Tag id={id} {...props} />;
+     };

@@ -2933,6 +2933,15 @@ input:focus-visible {
   color: var(--text-primary);
 }
 
+.dashboard-markdown .math-display,
+.dashboard-markdown .katex-display {
+  display: block;
+  text-align: center;
+  margin: 1.5rem 0;
+  font-size: 1.15rem;
+  overflow-x: auto;
+}
+
 /* ---- GeoGebra sandbox ---- */
 .dashboard-sandbox {
   border-radius: var(--radius-lg);
