@@ -8,6 +8,7 @@ import "katex/dist/katex.min.css";
 import "./App.css";
 import { Analytics } from '@vercel/analytics/react';
 import Dashboard from './components/Dashboard';
+import WelcomeModal from './components/WelcomeModal';
 
 // ─── Firestore Metadata Index ─────────────────────────────────
 interface MetadataIndex {
@@ -171,9 +172,13 @@ function QuestionCard({
     ? `${question.topic} • ${question.subtopic === "" ? "General" : question.subtopic}`
     : question.topic;
 
-  const rightHeader = (question.year !== undefined || question.difficulty !== undefined)
-    ? `${question.year ?? ""} • ${question.difficulty ?? ""}`.replace(/^ • | • $/g, "")
-    : `${question.marks ?? 0} marks`;
+  const boardStr = question.board ? String(question.board).trim() : '';
+  const subBoardStr = question.subBoard ? String(question.subBoard).trim() : '';
+  const yearStr = question.year ? String(question.year).trim() : '';
+  const paperStr = question.paper ? String(question.paper).trim() : '';
+  const qNum = question.question_number || question.question;
+  const qNumStr = qNum ? `Q${String(qNum).trim()}` : '';
+  const metadataString = [boardStr, subBoardStr, yearStr, paperStr, qNumStr].filter(Boolean).join(' ');
 
   const problemText = question.problem_markdown ?? question.question ?? "";
   const markSchemeText = question.mark_scheme_markdown ?? question.markScheme ?? "";
@@ -183,7 +188,9 @@ function QuestionCard({
     <div className="question-card">
       <div className="question-card-header">
         <span className="question-card-topic">{leftHeader}</span>
-        <span className="question-card-marks">{rightHeader}</span>
+        <span className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+          {metadataString}
+        </span>
       </div>
       <div className="question-card-text">
         <ReactMarkdown
@@ -456,6 +463,9 @@ function App() {
 
   return (
     <div className={`misty-app misty-theme-${themeMode.toLowerCase()}`}>
+      {/* Onboarding modal — only shown on first visit */}
+      <WelcomeModal />
+
       {/* Ambient background glow */}
       <div className="background-glow" aria-hidden="true">
         <div className="glow-orb glow-orb-1" />
@@ -730,11 +740,8 @@ function App() {
                       </p>
                     </div>
                   ) : (
-                    questionsList.map((q, i) => (
+                    questionsList.map((q) => (
                       <div className="paper-question-wrapper" key={q.id}>
-                        <span className="paper-question-number">
-                          Question {i + 1}
-                        </span>
                         <QuestionCard 
                           question={q} 
                           showExpandables={true}

@@ -3380,3 +3380,494 @@ input:focus-visible {
     height: 140px;
   }
 }
+
+/* ========================================
+   WELCOME MODAL — Onboarding Bento
+   ======================================== */
+
+/* ── Keyframes ── */
+@keyframes welcome-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes welcome-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+@keyframes welcome-slide-in {
+  from { opacity: 0; transform: translateY(24px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+@keyframes welcome-slide-out {
+  from { opacity: 1; transform: translateY(0)    scale(1); }
+  to   { opacity: 0; transform: translateY(16px) scale(0.97); }
+}
+@keyframes welcome-skeleton-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+
+/* ── Backdrop ── */
+.welcome-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(7, 7, 18, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.welcome-modal-fade-in  { animation: welcome-fade-in  0.35s ease both; }
+.welcome-modal-fade-out { animation: welcome-fade-out 0.30s ease both; }
+
+/* ── Container ── */
+.welcome-modal-container {
+  width: 100%;
+  max-width: 1024px;
+  background: rgba(8, 10, 28, 0.60);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 24px;
+  padding: 40px 48px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  box-shadow:
+    0 32px 80px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(129, 140, 248, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.welcome-modal-slide-in  { animation: welcome-slide-in  0.40s cubic-bezier(0.34, 1.20, 0.64, 1) both; }
+.welcome-modal-slide-out { animation: welcome-slide-out 0.30s ease both; }
+
+/* ── Header ── */
+.welcome-modal-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.welcome-modal-title-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.welcome-modal-title {
+  font-size: 2.35rem;
+  font-weight: 700;
+  color: #e8e8f0;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.welcome-modal-title-accent {
+  background: linear-gradient(135deg, #a5b4fc 0%, #c4b5fd 50%, #e0d4ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.welcome-modal-beta-badge {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 6px;
+  padding: 3px 8px;
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.welcome-modal-subtitle {
+  font-size: 0.95rem;
+  color: #6b6b88;
+  line-height: 1.55;
+  margin: 0;
+  max-width: 520px;
+}
+
+/* ── Section label ── */
+.welcome-modal-section-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #4a4a6a;
+  margin-bottom: 12px;
+}
+
+/* ── Bento Grid ── */
+.welcome-modal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+}
+
+/* ── Tour Column (span 2) ── */
+.welcome-modal-tour {
+  grid-column: span 2;
+}
+
+.welcome-modal-tour-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.welcome-tour-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.30);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.welcome-tour-card:hover {
+  transform: translateX(3px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.welcome-tour-card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.welcome-tour-icon {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.welcome-tour-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.welcome-tour-desc {
+  font-size: 0.84rem;
+  color: #94a3b8;
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* ── Changelog Column (span 1) ── */
+.welcome-modal-changelog {
+  grid-column: span 1;
+}
+
+.welcome-changelog-inner {
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 14px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: calc(100% - 28px); /* account for section label */
+}
+
+/* Skeleton loading */
+.welcome-changelog-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0;
+}
+.welcome-changelog-skeleton {
+  height: 12px;
+  width: 100%;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.09) 50%,
+    rgba(255, 255, 255, 0.04) 75%
+  );
+  background-size: 800px 12px;
+  animation: welcome-skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+.welcome-changelog-error {
+  font-size: 0.78rem;
+  color: #4a4a6a;
+  font-style: italic;
+  margin: 0;
+}
+
+.welcome-changelog-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.welcome-changelog-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.welcome-changelog-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.welcome-changelog-date {
+  font-family: 'JetBrains Mono', 'Fira Mono', 'Courier New', monospace;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: #818cf8;
+  text-transform: uppercase;
+}
+
+.welcome-changelog-msg {
+  font-family: 'JetBrains Mono', 'Fira Mono', 'Courier New', monospace;
+  font-size: 0.73rem;
+  color: #6b6b88;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.welcome-changelog-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  margin-top: auto;
+}
+
+.welcome-changelog-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+  flex-shrink: 0;
+}
+
+.welcome-changelog-footer-text {
+  font-family: 'JetBrains Mono', 'Fira Mono', 'Courier New', monospace;
+  font-size: 0.62rem;
+  color: #4a4a6a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Beta Warning ── */
+.welcome-modal-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.18);
+  border-radius: 10px;
+}
+
+.welcome-modal-warning-icon {
+  font-size: 0.9rem;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.welcome-modal-warning-text {
+  font-size: 0.8rem;
+  color: #9a8060;
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* ── Actions ── */
+.welcome-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.welcome-modal-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 28px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+  color: #ffffff;
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+}
+.welcome-modal-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(99, 102, 241, 0.55);
+  filter: brightness(1.08);
+}
+.welcome-modal-cta:active {
+  transform: translateY(0);
+}
+
+.welcome-modal-cta-arrow {
+  font-size: 1.05rem;
+  transition: transform 0.18s ease;
+}
+.welcome-modal-cta:hover .welcome-modal-cta-arrow {
+  transform: translateX(4px);
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .welcome-modal-container {
+    padding: 24px 20px 20px;
+    border-radius: 16px;
+  }
+  .welcome-modal-grid {
+    grid-template-columns: 1fr;
+  }
+  .welcome-modal-tour {
+    grid-column: span 1;
+  }
+  .welcome-modal-title {
+    font-size: 1.5rem;
+  }
+  .welcome-changelog-inner {
+    height: auto;
+  }
+}
+
+/* ── Floating Help Button ─────────────────────────────────────── */
+@keyframes welcome-help-ping {
+  0%   { transform: scale(1);    opacity: 0.75; }
+  70%  { transform: scale(1.55); opacity: 0;    }
+  100% { transform: scale(1.55); opacity: 0;    }
+}
+
+.welcome-help-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 40;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* keep relative so the ping pseudo-element is anchored */
+  isolation: isolate;
+}
+
+.welcome-help-ping {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #6366f1;
+  animation: welcome-help-ping 2.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+.welcome-help-inner {
+  position: relative;
+  z-index: 1;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+  box-shadow: 0 4px 18px rgba(99, 102, 241, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #ffffff;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.welcome-help-btn:hover .welcome-help-inner {
+  transform: scale(1.1);
+  box-shadow: 0 6px 24px rgba(99, 102, 241, 0.65);
+}
+
+.welcome-help-btn:active .welcome-help-inner {
+  transform: scale(0.95);
+}
+
+/* ── Tour Card — interactive expansions ──────────────────────── */
+.welcome-tour-card {
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.welcome-tour-card--open {
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* Section label hint text */
+.welcome-section-label-hint {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.65rem;
+  color: #3a3a5a;
+  font-style: italic;
+}
+
+/* Chevron indicator */
+.welcome-tour-chevron {
+  margin-left: auto;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: #4a4a6a;
+  display: inline-block;
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), color 0.18s ease;
+  /* rotate 90° so › becomes ↓ when open */
+  transform: rotate(0deg);
+}
+
+.welcome-tour-chevron--open {
+  transform: rotate(90deg);
+  color: #a0a0bc;
+}
+
+/* How-to expand panel */
+.welcome-tour-howto {
+  margin-top: 10px;
+  padding-top: 10px;
+  padding-bottom: 8px;
+}
+
+.welcome-tour-howto-text {
+  font-size: 0.8rem;
+  line-height: 1.65;
+  margin: 0;
+  font-style: italic;
+  color: #7e8aa0;
+  opacity: 0.95;
+}
