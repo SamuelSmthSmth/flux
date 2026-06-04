@@ -4,6 +4,8 @@ import { db } from '../firebase';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import { GeoGebraCodeBlock } from './GeoGebraCodeBlock';
+import { GeoGebraFloatingCalculator, type GeoGebraAppType } from './GeoGebraFloatingCalculator';
 
 // ─── Data Models ──────────────────────────────────────────────
 interface FieldDoc {
@@ -85,7 +87,7 @@ function extractHeadings(
   return headings;
 }
 
-function customMarkdownComponents(sectionSlug: string) {
+function customMarkdownComponents(sectionSlug: string, setIsCalculatorOpen?: (open: boolean) => void) {
   const extractText = (node: any): string => {
     if (typeof node === 'string') return node;
     if (typeof node === 'number') return String(node);
@@ -158,7 +160,23 @@ function customMarkdownComponents(sectionSlug: string) {
     ),
     li: ({ node, ...props }: any) => (
       <li className="leading-[2]" {...props} />
-    )
+    ),
+    // Intercept fenced ```geogebra ... ``` blocks and render the live applet
+    code: ({node, inline, className, children, ...props}: any) => {
+      const match = /language-(\w+)/.exec(className || '');
+      
+      if (!inline && match && match[1] === 'geogebra') {
+        const rawCode = String(children).replace(/\n$/, '');
+        return (
+          <GeoGebraCodeBlock
+            code={rawCode}
+            onOpenCalculator={() => setIsCalculatorOpen?.(true)}
+          />
+        );
+      }
+
+      return <code className={className} {...props}>{children}</code>;
+    },
   };
 }
 
@@ -345,6 +363,8 @@ export default function Dashboard({ mode }: DashboardProps) {
   // --- UI state ---
   const [selectedItem, setSelectedItem] = useState<FieldDoc | ForgeDoc | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
+  const [activeApp, setActiveApp] = useState<GeoGebraAppType>('graphing');
   const detailBodyRef = useRef<HTMLDivElement>(null);
   // --- Fetch on mount ---
   useEffect(() => {
@@ -536,6 +556,13 @@ export default function Dashboard({ mode }: DashboardProps) {
   // ─── Render ───────────────────────────────────────────────────
   return (
     <div className={`dashboard ${isDetailView ? 'dashboard-split' : ''}`}>
+      <GeoGebraFloatingCalculator
+        open={isCalculatorOpen}
+        onClose={() => setIsCalculatorOpen(false)}
+        activeApp={activeApp}
+        onAppChange={setActiveApp}
+      />
+
       {/* Master / Sidebar pane */}
       <div
         className={`dashboard-master ${isDetailView ? 'dashboard-master-compact' : ''} ${
@@ -585,9 +612,9 @@ export default function Dashboard({ mode }: DashboardProps) {
             <div className="dashboard-detail-body" ref={detailBodyRef}>
               <div className="dashboard-detail-content" key={selectedItem.id}>
                 {mode === 'Fields' ? (
-                  <FieldsDetail item={selectedItem as FieldDoc} scrollRef={detailBodyRef} />
+                  <FieldsDetail item={selectedItem as FieldDoc} scrollRef={detailBodyRef} setIsCalculatorOpen={setIsCalculatorOpen} />
                 ) : (
-                  <ForgeDetail item={selectedItem as ForgeDoc} scrollRef={detailBodyRef} />
+                  <ForgeDetail item={selectedItem as ForgeDoc} scrollRef={detailBodyRef} setIsCalculatorOpen={setIsCalculatorOpen} />
                 )}
               </div>
             </div>
@@ -617,7 +644,7 @@ function SectionHeading({ title, id, level = 3 }: { title: React.ReactNode; id?:
 }
 
 // ─── Fields Detail Pane ───────────────────────────────────────
-function FieldsDetail({ item, scrollRef }: { item: FieldDoc; scrollRef: React.RefObject<HTMLDivElement | null> }) {
+function FieldsDetail({ item, scrollRef, setIsCalculatorOpen }: { item: FieldDoc; scrollRef: React.RefObject<HTMLDivElement | null>; setIsCalculatorOpen: (open: boolean) => void }) {
   const sections = useMemo(() => {
     const s: { label: string; markdown: string }[] = [];
     if (item.markdown) {
@@ -641,7 +668,7 @@ function FieldsDetail({ item, scrollRef }: { item: FieldDoc; scrollRef: React.Re
               <ReactMarkdown
                 remarkPlugins={[remarkMath]}
                 rehypePlugins={[rehypeKatex]}
-                components={customMarkdownComponents(slugify('Field'))}
+                components={customMarkdownComponents(slugify('Field'), setIsCalculatorOpen)}
               >
                 {formatMathText(item.markdown)}
               </ReactMarkdown>
@@ -657,7 +684,7 @@ function FieldsDetail({ item, scrollRef }: { item: FieldDoc; scrollRef: React.Re
                   <ReactMarkdown
                     remarkPlugins={[remarkMath]}
                     rehypePlugins={[rehypeKatex]}
-                    components={customMarkdownComponents(slugify('Formal Statement'))}
+                    components={customMarkdownComponents(slugify('Formal Statement'), setIsCalculatorOpen)}
                   >
                     {formatMathText(item.formal_statement)}
                   </ReactMarkdown>
@@ -673,7 +700,7 @@ function FieldsDetail({ item, scrollRef }: { item: FieldDoc; scrollRef: React.Re
                   <ReactMarkdown
                     remarkPlugins={[remarkMath]}
                     rehypePlugins={[rehypeKatex]}
-                    components={customMarkdownComponents(slugify('Rigorous Proof'))}
+                    components={customMarkdownComponents(slugify('Rigorous Proof'), setIsCalculatorOpen)}
                   >
                     {formatMathText(item.rigorous_proof)}
                   </ReactMarkdown>
@@ -685,22 +712,11 @@ function FieldsDetail({ item, scrollRef }: { item: FieldDoc; scrollRef: React.Re
 
         {/* GeoGebra Sandbox */}
         {item.geogebra && (
-          <div className="dashboard-sandbox mt-12" id={`toc-${slugify('GeoGebra Sandbox')}`}>
-            <div className="dashboard-sandbox-header">
-              <span className="dashboard-sandbox-label">GeoGebra Interactive Sandbox</span>
-              <div className="dashboard-sandbox-dots">
-                <span /><span /><span />
-              </div>
-            </div>
-            <div className="dashboard-sandbox-body">
-              <div className="dashboard-sandbox-grid" aria-hidden="true" />
-              <div
-                className="dashboard-sandbox-placeholder"
-                style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', fontSize: '0.78rem', textAlign: 'left', maxWidth: '100%', overflow: 'auto' }}
-              >
-                {item.geogebra}
-              </div>
-            </div>
+          <div id={`toc-${slugify('GeoGebra Sandbox')}`}>
+            <GeoGebraCodeBlock
+              code={item.geogebra}
+              onOpenCalculator={() => setIsCalculatorOpen(true)}
+            />
           </div>
         )}
 
@@ -718,7 +734,7 @@ function FieldsDetail({ item, scrollRef }: { item: FieldDoc; scrollRef: React.Re
 }
 
 // ─── Forge Detail Pane ────────────────────────────────────────
-function ForgeDetail({ item, scrollRef }: { item: ForgeDoc; scrollRef: React.RefObject<HTMLDivElement | null> }) {
+function ForgeDetail({ item, scrollRef, setIsCalculatorOpen }: { item: ForgeDoc; scrollRef: React.RefObject<HTMLDivElement | null>; setIsCalculatorOpen: (open: boolean) => void }) {
   const sections = useMemo(() => {
     const s: { label: string; markdown: string }[] = [];
     if (item.question) s.push({ label: 'Question', markdown: item.question });
@@ -740,7 +756,7 @@ function ForgeDetail({ item, scrollRef }: { item: ForgeDoc; scrollRef: React.Ref
               <ReactMarkdown
                 remarkPlugins={[remarkMath]}
                 rehypePlugins={[rehypeKatex]}
-                components={customMarkdownComponents(slugify('Question'))}
+                components={customMarkdownComponents(slugify('Question'), setIsCalculatorOpen)}
               >
                 {formatMathText(item.question)}
               </ReactMarkdown>
@@ -762,7 +778,7 @@ function ForgeDetail({ item, scrollRef }: { item: ForgeDoc; scrollRef: React.Ref
                 <ReactMarkdown
                   remarkPlugins={[remarkMath]}
                   rehypePlugins={[rehypeKatex]}
-                  components={customMarkdownComponents(slugify('The Solution'))}
+                  components={customMarkdownComponents(slugify('The Solution'), setIsCalculatorOpen)}
                 >
                   {formatMathText(item.solution)}
                 </ReactMarkdown>
@@ -785,7 +801,7 @@ function ForgeDetail({ item, scrollRef }: { item: ForgeDoc; scrollRef: React.Ref
                 <ReactMarkdown
                   remarkPlugins={[remarkMath]}
                   rehypePlugins={[rehypeKatex]}
-                  components={customMarkdownComponents(slugify('Discussion'))}
+                  components={customMarkdownComponents(slugify('Discussion'), setIsCalculatorOpen)}
                 >
                   {formatMathText(item.discussion)}
                 </ReactMarkdown>
