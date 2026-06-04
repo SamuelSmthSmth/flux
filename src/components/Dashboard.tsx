@@ -231,7 +231,15 @@ function TableOfContents({
           className={`toc-item toc-level-${h.level} ${activeId === h.id ? 'toc-active' : ''}`}
         >
           <button onClick={() => scrollTo(h.id)} type="button">
-            {h.text}
+            <ReactMarkdown
+              remarkPlugins={[remarkMath]}
+              rehypePlugins={[rehypeKatex]}
+              components={{
+                p: ({ node, ...props }: any) => <span {...props} />,
+              }}
+            >
+              {h.text}
+            </ReactMarkdown>
           </button>
         </li>
       ))}
