@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Public read: the app has no auth flow — questions are fetched unauthenticated.
+    // Write stays locked; data is written via the admin SDK upload scripts instead.
+    match /{document=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "web-design": {
+      "source": "xiaopu-ai/web-design",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "63595868c18c04209ae2ea84eee8d8f58a820d120bce9e039294400ac68313e3"
+    }
+  }
+}
