@@ -7,7 +7,7 @@
 
 /* ═══════════════════════════════════════════════════════════════
    MISTY — Three Themes
-   1. Editorial — dotted grid, indigo accent (default)
+   1. Editorial — dotted grid, green-blue mix accent (default)
    2. Notebook — ruled paper, red pen, handwriting + scribble jitter
    3. XP       — Windows XP Luna chrome, taskbar nav, beveled buttons
    ═══════════════════════════════════════════════════════════════ */
@@ -23,8 +23,10 @@
   --border: rgba(0,0,0,0.07); --border-strong: rgba(0,0,0,0.12);
   --text: #1a1d28; --text-secondary: #4a4d58;
   --text-muted: #7a7d88; --text-subtle: #a0a3ac;
-  --accent: #6b57b8; --accent-hover: #5a489f;
-  --accent-soft: rgba(107,87,184,0.07); --accent-soft2: rgba(107,87,184,0.12);
+  --accent: #0284c7; --accent-hover: #0369a1;
+  --accent-gradient: linear-gradient(135deg, #10b981 0%, #0284c7 100%);
+  --accent-soft: rgba(16,185,129,0.08); --accent-soft2: rgba(2,132,199,0.12);
+  --logo-bg: #2563eb;
   --danger: #c4554d; --success: #5a8f6c;
   --radius-sm: 6px; --radius: 8px; --radius-lg: 12px;
   --radius-xl: 16px; --radius-2xl: 20px;
@@ -45,7 +47,9 @@
   --text: #e4e1d8; --text-secondary: #a09d94;
   --text-muted: #6e6c66; --text-subtle: #4a4845;
   --accent: #9b85d9; --accent-hover: #b09cea;
+  --accent-gradient: linear-gradient(135deg, #9b85d9 0%, #c084fc 100%);
   --accent-soft: rgba(155,133,217,0.08); --accent-soft2: rgba(155,133,217,0.14);
+  --logo-bg: #8b5cf6;
   --danger: #d4736e;
   --nav-bg: rgba(12,14,20,0.72); --nav-border: rgba(255,255,255,0.06);
 }
@@ -214,7 +218,7 @@
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 2px rgba(0,0,0,0.3);
 }
 [data-vibe="xp"] .nav-wordmark { color: #fff; font-weight: 700; font-style: italic; text-shadow: 0 1px 1px rgba(0,0,0,0.5); }
-[data-vibe="xp"] .nav-wordmark-accent { color: #fff; }
+[data-vibe="xp"] .nav-wordmark-accent { color: #fff; -webkit-text-fill-color: #fff; background: none; }
 [data-vibe="xp"] .nav-icon-btn { color: #fff; }
 [data-vibe="xp"] .nav-icon-btn:hover { color: #fff; background: rgba(255,255,255,0.15); }
 
@@ -407,7 +411,7 @@
    APP SHELL
    ═══════════════════════════════════════════════════ */
 
-.misty-app {
+.flux-app {
   position: relative;
   display: flex; flex-direction: column;
   height: 100vh; width: 100vw;
@@ -448,7 +452,7 @@
 
 .nav-logo {
   width: 32px; height: 32px; border-radius: var(--radius);
-  background: var(--accent); color: #fff;
+  background: var(--logo-bg, #2563eb); color: #fff;
   display: flex; align-items: center; justify-content: center;
   font-weight: 700; font-size: 1rem;
   transition: background 0.4s ease;
@@ -460,7 +464,12 @@
   transition: color 0.4s ease;
 }
 
-.nav-wordmark-accent { color: var(--accent); transition: color 0.4s ease; }
+.nav-wordmark-accent {
+  background: var(--accent-gradient, var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  transition: color 0.4s ease;
+}
 
 .nav-right {
   display: flex; align-items: center; gap: var(--sp-2);
@@ -508,6 +517,7 @@
   align-items: center; justify-content: center;
   gap: var(--sp-7); padding: var(--sp-6);
   animation: stepIn 0.4s cubic-bezier(0.16,1,0.3,1);
+  overflow-y: auto; min-height: 0;
 }
 
 @keyframes stepIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
@@ -946,8 +956,12 @@
 .welcome-header { padding: var(--sp-6) var(--sp-6) var(--sp-5); text-align: center; border-bottom: 1px solid var(--border); }
 .welcome-title-row { display: flex; align-items: center; justify-content: center; gap: var(--sp-3); margin-bottom: var(--sp-2); }
 .welcome-title { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.015em; color: var(--text); }
-.welcome-title-accent { color: var(--accent); }
-.welcome-beta { padding: 2px 8px; border-radius: 9999px; background: var(--accent); color: #fff; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+.welcome-title-accent {
+  background: var(--accent-gradient, var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.welcome-beta { padding: 2px 8px; border-radius: 9999px; background: var(--accent-gradient, var(--accent)); color: #fff; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
 .welcome-subtitle { font-size: 0.88rem; color: var(--text-muted); }
 .welcome-body { padding: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-5); }
 .welcome-section-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-subtle); margin-bottom: var(--sp-3); }
@@ -992,3 +1006,146 @@
 
 .katex { font-size: 1.05em; }
 .katex-display { margin: 1em 0; }
+
+/* ═══════════════════════════════════════════════════
+   THEME TRANSITION (Flash Lighting Flux)
+   ═══════════════════════════════════════════════════ */
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: plus-lighter;
+}
+
+::view-transition-old(root) {
+  animation: flux-out 0.15s ease-out forwards;
+}
+
+::view-transition-new(root) {
+  animation: flux-in 0.15s ease-in forwards;
+}
+
+@keyframes flux-out {
+  0% { opacity: 1; filter: brightness(1) blur(0px); }
+  50% { opacity: 0; filter: brightness(2.5) blur(10px); }
+  100% { opacity: 0; filter: brightness(1) blur(0px); }
+}
+
+@keyframes flux-in {
+  0% { opacity: 0; filter: brightness(2.5) blur(10px); }
+  50% { opacity: 1; filter: brightness(2.5) blur(10px); }
+  100% { opacity: 1; filter: brightness(1) blur(0px); }
+}
+
+/* ═══════════════════════════════════════════════════
+   FLUX INTRO ANIMATION
+   ═══════════════════════════════════════════════════ */
+
+.flux-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.flux-intro-word {
+  display: flex;
+  gap: 0.1em;
+  font-family: var(--font-ui);
+  font-size: 5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.flux-intro-letter {
+  opacity: 0;
+  color: var(--accent);
+  text-shadow: 0 0 20px var(--accent-subtle);
+  display: inline-block;
+}
+
+@keyframes flux-letter-assemble {
+  0% {
+    opacity: 0;
+    transform: translate(calc(var(--rx, 0) * 100px), calc(var(--ry, 0) * 120px)) scale(1.5) rotate(calc(var(--rz, 0) * 45deg));
+    filter: blur(12px) brightness(2);
+  }
+  30% {
+    opacity: 1;
+    filter: blur(0px) brightness(1.2);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, -20px) scale(1) rotate(0);
+    filter: blur(0px) brightness(1);
+  }
+}
+
+@keyframes flux-intro-fade-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+.flux-intro-loader {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent) 80%, #fff 100%);
+  box-shadow: 0 0 12px var(--accent), 0 0 4px #fff;
+  animation: flux-intro-load forwards ease-in-out, flux-electric-flicker 0.1s infinite;
+}
+
+@keyframes flux-intro-load {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
+
+@keyframes flux-electric-flicker {
+  0% { opacity: 1; transform: scaleY(1); }
+  50% { opacity: 0.7; transform: scaleY(1.5); }
+  100% { opacity: 1; transform: scaleY(1); }
+}
+
+/* ═══════════════════════════════════════════════════
+   FLOATING CONTROLS
+   ═══════════════════════════════════════════════════ */
+
+.floating-controls-tr {
+  position: absolute;
+  top: var(--sp-4);
+  right: var(--sp-6);
+  z-index: 50;
+}
+
+.floating-controls-bl {
+  position: absolute;
+  bottom: var(--sp-4);
+  left: var(--sp-6);
+  z-index: 50;
+}
+
+/* ═══════════════════════════════════════════════════
+   LOADING ANIMATION
+   ═══════════════════════════════════════════════════ */
+
+.loading-pulse-container {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: var(--sp-6);
+  width: 100%;
+}
+.loading-pulse {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent);
+  animation: pulse-bounce 1s infinite cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes pulse-bounce {
+  0%, 100% { transform: translateY(0); opacity: 0.3; }
+  50% { transform: translateY(-4px); opacity: 1; }
+}

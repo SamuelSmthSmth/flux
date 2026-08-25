@@ -26,94 +26,83 @@ function IconMoon({ size = 18 }: { size?: number }) {
   );
 }
 
-function IconNotebook({ size = 14 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-      <line x1="8" y1="7" x2="16" y2="7" /><line x1="8" y1="11" x2="14" y2="11" />
-    </svg>
-  );
-}
+/* ─── Flux Intro Splash ─────────────────────────────────────── */
 
-function IconGrid({ size = 14 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
-      <rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
-    </svg>
-  );
-}
+function FluxIntro({ onDone, isFirstTime }: { onDone: () => void, isFirstTime: boolean }) {
+  const fadeDelay = isFirstTime ? 800 : 350;
+  const fadeDuration = isFirstTime ? 500 : 350;
+  const letterDuration = isFirstTime ? 2000 : 900;
+  const letterStagger = isFirstTime ? 80 : 40;
 
-function IconXP({ size = 14 }: { size?: number }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, fadeDelay + fadeDuration);
+    return () => clearTimeout(t);
+  }, [onDone, fadeDelay, fadeDuration]);
+
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="18" height="16" rx="1" />
-      <line x1="3" y1="8" x2="21" y2="8" />
-      <circle cx="6" cy="6" r="0.5" fill="currentColor" />
-      <line x1="3" y1="14" x2="21" y2="14" />
-    </svg>
+    <div className="flux-intro" aria-hidden="true" style={{ 
+      animation: `flux-intro-fade-out ${fadeDuration}ms ease ${fadeDelay}ms forwards`
+    }}>
+      <div className="flux-intro-word">
+        {"FLUX".split("").map((letter, i) => {
+          // Generate deterministic pseudo-random values based on index
+          const rx = Math.sin(i * 1.5) * 2;
+          const ry = Math.cos(i * 2.1) * 2;
+          const rz = Math.sin(i * 3.7);
+          return (
+            <span key={i} className="flux-intro-letter" style={{ 
+              animation: `flux-letter-assemble ${letterDuration}ms cubic-bezier(0.1, 0.9, 0.2, 1) forwards`,
+              animationDelay: `${i * letterStagger}ms`,
+              '--rx': rx,
+              '--ry': ry,
+              '--rz': rz
+            } as React.CSSProperties}>
+              {letter}
+            </span>
+          );
+        })}
+      </div>
+      <div className="flux-intro-loader" style={{ animationDuration: `${fadeDelay + fadeDuration}ms` }} />
+    </div>
   );
 }
 
 /* ─── Theme system ──────────────────────────────────────────── */
 
-type Vibe = "editorial" | "notebook" | "xp";
-const VIBE_CYCLE: Vibe[] = ["editorial", "notebook", "xp"];
-
-function VibeIcon({ vibe, size = 14 }: { vibe: Vibe; size?: number }) {
-  if (vibe === "notebook") return <IconNotebook size={size} />;
-  if (vibe === "xp") return <IconXP size={size} />;
-  return <IconGrid size={size} />;
-}
-
-function VibeLabel({ vibe }: { vibe: Vibe }) {
-  if (vibe === "notebook") return "Notebook";
-  if (vibe === "xp") return "Windows XP";
-  return "Editorial";
-}
-
 function useTheme() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    const saved = localStorage.getItem("misty-theme");
+    const saved = localStorage.getItem("flux-theme");
     if (saved === "dark" || saved === "light") return saved;
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   });
 
-  const [vibe, setVibe] = useState<Vibe>(() => {
-    const saved = localStorage.getItem("misty-vibe");
-    return (saved && VIBE_CYCLE.includes(saved as Vibe) ? saved : "editorial") as Vibe;
-  });
-
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("misty-theme", theme);
+    localStorage.setItem("flux-theme", theme);
   }, [theme]);
 
-  useEffect(() => {
-    document.documentElement.setAttribute("data-vibe", vibe);
-    localStorage.setItem("misty-vibe", vibe);
-  }, [vibe]);
-
-  const cycleVibe = useCallback(() => {
-    setVibe(prev => VIBE_CYCLE[(VIBE_CYCLE.indexOf(prev) + 1) % VIBE_CYCLE.length]);
-  }, []);
-
   return {
-    theme, vibe,
+    theme,
     toggleTheme: () => setTheme(t => t === "light" ? "dark" : "light"),
-    cycleVibe,
   };
 }
 
 /* ─── App Shell ─────────────────────────────────────────────── */
 
 function AppShell() {
-  const { theme, vibe, toggleTheme, cycleVibe } = useTheme();
-  const nextVibe = VIBE_CYCLE[(VIBE_CYCLE.indexOf(vibe) + 1) % VIBE_CYCLE.length];
+  const { theme, toggleTheme } = useTheme();
+  const [introVisible, setIntroVisible] = useState(true);
+  const [isFirstTime] = useState(() => !localStorage.getItem("flux-intro-played"));
+
+  const handleIntroDone = useCallback(() => {
+    setIntroVisible(false);
+    localStorage.setItem("flux-intro-played", "1");
+  }, []);
 
   return (
-    <div className="misty-app">
+    <div className="flux-app">
+      {introVisible && <FluxIntro onDone={handleIntroDone} isFirstTime={isFirstTime} />}
+
       {/* Scribble SVG filter for notebook theme */}
       <svg className="app-scribble-filter" aria-hidden="true" style={{ position: 'fixed', width: 0, height: 0 }}>
         <defs>
@@ -133,28 +122,12 @@ function AppShell() {
 
       <WelcomeModal />
 
-      {/* Nav with gradient fade inner */}
-      <nav className="nav">
-        <div className="nav-inner" aria-hidden="true" />
-        <div className="nav-brand">
-          <div className="nav-logo">M</div>
-          <span className="nav-wordmark">
-            <span className="nav-wordmark-accent">Misty</span>
-          </span>
-        </div>
-
-        <div className="nav-right">
-          <button className="theme-switch-btn" onClick={cycleVibe} type="button"
-            title={`Switch to ${VibeLabel({ vibe: nextVibe })} theme`}>
-            <VibeIcon vibe={nextVibe} size={14} />
-            <VibeLabel vibe={nextVibe} />
-          </button>
-
-          <button className="nav-icon-btn" onClick={toggleTheme} aria-label="Toggle dark mode" type="button">
-            {theme === "light" ? <IconMoon size={18} /> : <IconSun size={18} />}
-          </button>
-        </div>
-      </nav>
+      {/* Floating Controls */}
+      <div className="floating-controls-tr">
+        <button className="nav-icon-btn" onClick={toggleTheme} aria-label="Toggle dark mode" type="button">
+          {theme === "light" ? <IconMoon size={18} /> : <IconSun size={18} />}
+        </button>
+      </div>
 
       <Routes>
         <Route path="/*" element={<FluxPage />} />

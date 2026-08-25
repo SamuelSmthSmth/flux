@@ -71,6 +71,16 @@ function IconFileText({ size = 14 }: { size?: number }) {
   );
 }
 
+function LoadingState() {
+  return (
+    <div className="loading-pulse-container">
+      <div className="loading-pulse" />
+      <div className="loading-pulse" style={{ animationDelay: '0.15s' }} />
+      <div className="loading-pulse" style={{ animationDelay: '0.3s' }} />
+    </div>
+  );
+}
+
 /* ─── Types ──────────────────────────────────────────────────── */
 
 interface MetadataIndex {
@@ -122,6 +132,7 @@ export default function FluxPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>("mark_scheme");
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const sidebarRef = useRef<HTMLDivElement>(null);
   const mainScrollRef = useRef<HTMLDivElement>(null);
@@ -172,7 +183,7 @@ export default function FluxPage() {
     return result;
   }, [metadata, search, exam]);
 
-  const CACHE_PREFIX = "misty_qcache";
+  const CACHE_PREFIX = "flux_qcache";
 
   const handleFind = async () => {
     if (!topic) return;
@@ -386,15 +397,26 @@ export default function FluxPage() {
     setDetailId(qId);
     setDetailTab(tab);
     setSidebarOpen(false);
+    setDetailLoading(true);
+    setTimeout(() => setDetailLoading(false), 400);
   };
 
   const handleCloseDetail = () => {
     setDetailId(null);
+    setSidebarOpen(true);
   };
 
   const handleToggleSidebar = () => {
     setSidebarOpen(o => !o);
     setDetailId(null); // Closing sidebar auto-closes detail
+  };
+
+  const handleDetailTabChange = (tab: DetailTab) => {
+    if (detailTab !== tab) {
+      setDetailTab(tab);
+      setDetailLoading(true);
+      setTimeout(() => setDetailLoading(false), 400);
+    }
   };
 
   const detailQuestion = detailId ? questions.find(q => q.id === detailId) : null;
@@ -511,26 +533,36 @@ export default function FluxPage() {
               <div className="detail-tabs">
                 <button
                   className={`detail-tab ${detailTab === "mark_scheme" ? "active" : ""}`}
-                  onClick={() => setDetailTab("mark_scheme")}
+                  onClick={() => handleDetailTabChange("mark_scheme")}
                   type="button"
                 >
                   Mark Scheme
                 </button>
-                <button
-                  className={`detail-tab ${detailTab === "examiner_report" ? "active" : ""}`}
-                  onClick={() => setDetailTab("examiner_report")}
-                  type="button"
-                >
-                  Examiner Report
-                </button>
+                {detailQuestion.examiner_report_markdown || detailQuestion.examinerNotes ? (
+                  <button
+                    className={`detail-tab ${detailTab === "examiner_report" ? "active" : ""}`}
+                    onClick={() => handleDetailTabChange("examiner_report")}
+                    type="button"
+                  >
+                    Examiner Report
+                  </button>
+                ) : null}
                 <button className="detail-close" onClick={handleCloseDetail} type="button" title="Close">
                   ✕
                 </button>
               </div>
               <div className="detail-content">
-                <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                  {fmt(detailContent || "*No content available.*")}
-                </ReactMarkdown>
+                {detailLoading ? (
+                  <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+                    <LoadingState />
+                  </div>
+                ) : detailContent ? (
+                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                    {fmt(detailContent)}
+                  </ReactMarkdown>
+                ) : (
+                  <div style={{ opacity: 0.5 }}>Not available for this question.</div>
+                )}
               </div>
             </>
           )}

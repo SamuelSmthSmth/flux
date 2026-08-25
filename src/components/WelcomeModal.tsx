@@ -4,10 +4,10 @@ interface Commit { sha: string; commit: { message: string; author: { date: strin
 interface FallbackEntry { message: string; date: string; }
 
 const GITHUB_USER = "SamuelSmthSmth";
-const GITHUB_REPO = "misty";
+const GITHUB_REPO = "flux";
 
 const FALLBACK: FallbackEntry[] = [
-  { message: "Misty Beta — Edexcel & AEA past-papers integrated.", date: new Date().toISOString() },
+  { message: "Flux Beta — Edexcel & AEA past-papers integrated.", date: new Date().toISOString() },
   { message: "Topic browser rebuilt with full taxonomy search.", date: new Date().toISOString() },
   { message: "Mark schemes & examiner reports now inline per question.", date: new Date().toISOString() },
 ];
@@ -15,9 +15,7 @@ const FALLBACK: FallbackEntry[] = [
 const TOUR = [
   {
     name: "How Flux works",
-    desc: "Filter thousands of A-Level past-paper questions by topic, exam board, and tier. Every question comes with its official mark scheme and examiner commentary.",
-    detail: "Step 1 — Choose Standard (A-Level) or Advanced (extension). Step 2 — Browse the full topic taxonomy and pick what you need. Step 3 — Get real exam questions with mark schemes and examiner notes inline.",
-  },
+    desc: "Filter thousands of A-Level past-paper questions by topic, exam board, and tier. Every question comes with its official mark scheme and examiner commentary."  },
 ];
 
 function formatDate(iso: string) {
@@ -47,7 +45,7 @@ export default function WelcomeModal() {
   const [changelog, setChangelog] = useState<FallbackEntry[]>([]);
   const [clLoading, setClLoading] = useState(true);
 
-  useEffect(() => { if (!localStorage.getItem("misty_welcomed")) setVisible(true); }, []);
+  useEffect(() => { if (!localStorage.getItem("flux_welcomed")) setVisible(true); }, []);
 
   useEffect(() => {
     if (!visible) return;
@@ -68,7 +66,7 @@ export default function WelcomeModal() {
 
   const close = () => {
     setClosing(true);
-    setTimeout(() => { setVisible(false); setClosing(false); localStorage.setItem("misty_welcomed", "true"); }, 300);
+    setTimeout(() => { setVisible(false); setClosing(false); localStorage.setItem("flux_welcomed", "true"); }, 300);
   };
 
   if (!visible) {
@@ -84,7 +82,7 @@ export default function WelcomeModal() {
       <div className="welcome-container" style={closing ? { opacity: 0, transform: 'translateY(16px)', transition: 'all 0.25s ease-in' } : {}}>
         <div className="welcome-header">
           <div className="welcome-title-row">
-            <h1 className="welcome-title">Welcome to <span className="welcome-title-accent">Misty</span></h1>
+            <h1 className="welcome-title">Welcome to <span className="welcome-title-accent">Flux</span></h1>
             <span className="welcome-beta">BETA</span>
           </div>
           <p className="welcome-subtitle">A searchable question bank for advanced mathematics.</p>
@@ -109,7 +107,6 @@ export default function WelcomeModal() {
                     <p className="welcome-card-desc">{s.desc}</p>
                     <ExpandPanel open={open}>
                       <div className="welcome-card-how" style={{ borderTop: '1px solid var(--border)' }}>
-                        <p>{s.detail}</p>
                       </div>
                     </ExpandPanel>
                   </div>
@@ -141,12 +138,12 @@ export default function WelcomeModal() {
 
         <div className="welcome-warning">
           <span>—</span>
-          <p>Misty is in active development. Content may be incomplete.</p>
+          <p>Flux is in active development. Content may be incomplete.</p>
         </div>
 
         <div className="welcome-footer">
           <button type="button" className="welcome-enter" onClick={close}>
-            Enter Flux
+            Continue
           </button>
         </div>
       </div>
