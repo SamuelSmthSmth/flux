@@ -1752,19 +1752,22 @@
   html.ws-open .worksheet-toolbar { display: none !important; }
   html.ws-open .worksheet-print { overflow: visible; padding: 0; zoom: 1; }
 
+  /* Fixed-A4 sheets tile 1:1. No forced breaks: an exact-fit page followed
+     by a forced page break is what makes browsers emit a blank page after
+     every sheet. Locking each page to exactly 1123px keeps boundaries aligned. */
   .official-page {
     margin: 0 auto;
     box-shadow: none;
-    page-break-after: always;
-    break-after: page;
     overflow: visible;
+    height: 1123px;
+    min-height: 1123px;
+    page-break-after: auto;
+    break-after: auto;
   }
   .official-ms-step {
     page-break-inside: avoid;
     break-inside: avoid;
   }
-  .official-page:last-child { page-break-after: auto; break-after: auto; }
-  .official-question-page { min-height: 1123px; }
 
   .ws-cover, .ws-question { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .ws-cover { page-break-after: always; break-after: page; }
