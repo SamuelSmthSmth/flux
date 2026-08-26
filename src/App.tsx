@@ -1,9 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { Analytics } from '@vercel/analytics/react';
 import FluxPage from "./pages/FluxPage";
 import WelcomeModal from "./components/WelcomeModal";
 import { MathSymbolsBackdrop } from "./components/MathSymbolsBackdrop";
+import { BriefcaseProvider, BriefcaseIcon } from "./briefcase";
+import { useBriefcase } from "./briefcase-context";
+import { BriefcaseDrawer, type CoverStyle } from "./components/BriefcaseDrawer";
+import { WorksheetView } from "./components/WorksheetView";
 
 /* ─── SVG icons ─────────────────────────────────────────────── */
 
@@ -150,11 +154,46 @@ function useMouseParallax() {
   }, []);
 }
 
+/* ─── Briefcase button ──────────────────────────────────────── */
+
+function BriefcaseButton() {
+  const { count, open } = useBriefcase();
+  return (
+    <button
+      type="button"
+      className={`briefcase-float ${count > 0 ? "forged" : ""}`}
+      onClick={open}
+      aria-label={`Briefcase — ${count} ${count === 1 ? "question" : "questions"} collected`}
+      title="The Briefcase"
+    >
+      <BriefcaseIcon size={19} />
+      {count > 0 && <span className="briefcase-float-badge">{count}</span>}
+    </button>
+  );
+}
+
+/* ─── Paper route (/paper) ──────────────────────────────────── */
+
+function PaperPage() {
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const style: CoverStyle = params.get("style") === "eco" ? "eco" : "official";
+  const includeAnswers = params.get("answers") !== "0";
+  return (
+    <WorksheetView
+      style={style}
+      includeAnswers={includeAnswers}
+      onClose={() => navigate("/home")}
+    />
+  );
+}
+
 /* ─── App Shell ─────────────────────────────────────────────── */
 
 function AppShell() {
   const { theme, toggleTheme } = useTheme();
   useMouseParallax();
+  const navigate = useNavigate();
   const [introVisible, setIntroVisible] = useState(true);
   const [isFirstTime] = useState(() => !localStorage.getItem("flux-intro-played"));
 
@@ -163,33 +202,50 @@ function AppShell() {
     localStorage.setItem("flux-intro-played", "1");
   }, []);
 
+  const handleExport = useCallback((style: CoverStyle, includeAnswers: boolean) => {
+    const params = new URLSearchParams();
+    params.set("style", style);
+    params.set("answers", includeAnswers ? "1" : "0");
+    navigate(`/paper?${params.toString()}`);
+  }, [navigate]);
+
   return (
-    <div className="flux-app">
-      {introVisible && <FluxIntro onDone={handleIntroDone} isFirstTime={isFirstTime} />}
+    <BriefcaseProvider>
+      <div className="flux-app">
+        {introVisible && <FluxIntro onDone={handleIntroDone} isFirstTime={isFirstTime} />}
 
-      {/* Parallax background */}
-      <div className="app-bg" aria-hidden="true">
-        <div className="app-bg-grid" />
-        <div className="app-bg-glow app-bg-glow-1" />
-        <div className="app-bg-glow app-bg-glow-2" />
-        <MathSymbolsBackdrop />
+        {/* Parallax background */}
+        <div className="app-bg" aria-hidden="true">
+          <div className="app-bg-grid" />
+          <div className="app-bg-glow app-bg-glow-1" />
+          <div className="app-bg-glow app-bg-glow-2" />
+          <MathSymbolsBackdrop />
+        </div>
+
+        <WelcomeModal />
+
+        {/* Floating Controls */}
+        <div className="floating-controls-tr">
+          <button className="nav-icon-btn" onClick={toggleTheme} aria-label="Toggle dark mode" type="button">
+            {theme === "light" ? <IconMoon size={18} /> : <IconSun size={18} />}
+          </button>
+        </div>
+        <BriefcaseButton />
+
+        <Routes>
+          <Route path="/" element={<Navigate to="/home" replace />} />
+          <Route path="/home" element={<FluxPage />} />
+          <Route path="/topics" element={<FluxPage />} />
+          <Route path="/results" element={<FluxPage />} />
+          <Route path="/paper" element={<PaperPage />} />
+          <Route path="*" element={<Navigate to="/home" replace />} />
+        </Routes>
+
+        <BriefcaseDrawer onExport={handleExport} />
+
+        <Analytics />
       </div>
-
-      <WelcomeModal />
-
-      {/* Floating Controls */}
-      <div className="floating-controls-tr">
-        <button className="nav-icon-btn" onClick={toggleTheme} aria-label="Toggle dark mode" type="button">
-          {theme === "light" ? <IconMoon size={18} /> : <IconSun size={18} />}
-        </button>
-      </div>
-
-      <Routes>
-        <Route path="/*" element={<FluxPage />} />
-      </Routes>
-
-      <Analytics />
-    </div>
+    </BriefcaseProvider>
   );
 }
 

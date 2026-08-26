@@ -1,11 +1,16 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { doc, getDoc, collection, query, where, limit, getDocs } from "firebase/firestore";
 import type { QueryConstraint } from "firebase/firestore";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { db } from "../firebase";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
+import { fmt } from "../lib/markdown";
+import { splitMarkSchemeSteps, stepNumber } from "../lib/msSteps";
+import { useBriefcase } from "../briefcase-context";
+import { BriefcaseIcon } from "../briefcase";
 
 /* ─── Simple inline SVG icons (no emoji) ──────────────────── */
 
@@ -117,7 +122,6 @@ interface QuestionDoc {
   [key: string]: unknown;
 }
 
-type Step = 1 | 2 | 3;
 type DetailTab = "mark_scheme" | "examiner_report" | null;
 
 const STANDARD: ExamOption[] = [
@@ -134,22 +138,41 @@ const ADVANCED: ExamOption[] = [
   { label: 'MadAsMaths SPX', board: 'MadAsMaths', subBoard: 'SPX' },
 ];
 
-const fmt = (t: string) => !t ? "" : t.replace(/\$\$(.*?)\$\$/gs, (_, p) => `\n$$\n${p.trim()}\n$$\n`);
+function findExam(board: string, subBoard: string): ExamOption {
+  return [...ADVANCED, ...STANDARD].find(o => o.board === board && o.subBoard === subBoard) ?? STANDARD[0];
+}
 
 /* ─── Main Page ─────────────────────────────────────────────── */
 
 export default function FluxPage() {
-  const [step, setStep] = useState<Step>(1);
-  const [tier, setTier] = useState<'standard' | 'advanced' | null>(null);
-  const [exam, setExam] = useState<ExamOption>(STANDARD[0]);
+  const { toggle, isSelected } = useBriefcase();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // URL is the source of truth: /home → picker, /topics → browser, /results → results.
+  const path = location.pathname;
+  const step: 1 | 2 | 3 = path === "/home" ? 1 : path === "/topics" ? 2 : 3;
+
+  const topic = searchParams.get("topic") ?? "";
+  const subtopic = searchParams.get("subtopic") ?? "";
+
+  // The exam selection is local state while picking on /home — the URL only
+  // learns about it once the user clicks Continue (so selecting boards doesn't
+  // rewrite the address bar). If the URL already carries an exam (e.g. coming
+  // back from /topics), we restore it.
+  const [exam, setExam] = useState<ExamOption>(() =>
+    findExam(searchParams.get("board") ?? "", searchParams.get("subBoard") ?? "")
+  );
+  // Advanced tier includes AEA, whose board is "Edexcel" — so classify by the
+  // exam option itself, not by the board string.
+  const tier: 'standard' | 'advanced' = ADVANCED.some(o => o.label === exam.label) ? 'advanced' : 'standard';
+  const examOptions = tier === 'advanced' ? ADVANCED : STANDARD;
 
   const [metadata, setMetadata] = useState<MetadataIndex | null>(null);
   const [metaLoading, setMetaLoading] = useState(true);
 
   const [search, setSearch] = useState("");
-  const [topic, setTopic] = useState("");
-  const [subtopic, setSubtopic] = useState("");
-
   const [questions, setQuestions] = useState<QuestionDoc[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [queryError, setQueryError] = useState<string | null>(null);
@@ -157,6 +180,7 @@ export default function FluxPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>("mark_scheme");
+  const [revealedSteps, setRevealedSteps] = useState<Record<string, number>>({});
   const [hintIndex, setHintIndex] = useState(0);
   const [elapsed, setElapsed] = useState(0);
 
@@ -185,19 +209,21 @@ export default function FluxPage() {
 
   // Reset selected topic when exam board changes
   const handleExamChange = (opt: ExamOption) => {
-    if (opt.board !== exam.board) { setTopic(""); setSubtopic(""); }
     setExam(opt);
   };
 
   // Reset on tier change
   const handleTierSelect = (t: 'standard' | 'advanced') => {
-    setTier(t);
-    setTopic("");
-    setSubtopic("");
     setExam(t === 'advanced' ? ADVANCED[0] : STANDARD[0]);
   };
 
-  const examOptions = tier === 'advanced' ? ADVANCED : STANDARD;
+  // Commit the exam choice to the URL and move to the topic browser.
+  const continueToTopics = () => {
+    const next = new URLSearchParams(searchParams);
+    next.set("board", exam.board);
+    next.set("subBoard", exam.subBoard);
+    navigate(`/topics?${next.toString()}`);
+  };
 
   const filteredTopics = useMemo(() => {
     if (!metadata) return {} as Record<string, string[]>;
@@ -219,14 +245,24 @@ export default function FluxPage() {
 
   const CACHE_PREFIX = "flux_qcache";
 
-  const handleFind = async () => {
-    if (!topic) return;
+  // Cache key for whatever search the URL describes (board + topic + subtopic).
+  const searchKey = () => {
+    const t = searchParams.get("topic") ?? "";
+    const st = searchParams.get("subtopic") ?? "";
+    return `${CACHE_PREFIX}_${exam.board}_${exam.subBoard}_${t}_${st || "all"}`;
+  };
+
+  // Track the most recent search so a direct load of /results re-runs it.
+  const searchedKeyRef = useRef<string | null>(null);
+
+  // Fetch questions for the current URL params (no navigation — caller navigates).
+  const fetchQuestions = async () => {
+    const key = searchKey();
     setHintIndex(0);
     setElapsed(0);
-    const cacheKey = `${CACHE_PREFIX}_${exam.board}_${exam.subBoard}_${topic}_${subtopic || "all"}`;
 
     // Check localStorage cache first
-    const cached = localStorage.getItem(cacheKey);
+    const cached = localStorage.getItem(key);
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
@@ -234,7 +270,6 @@ export default function FluxPage() {
           setQuestions(parsed);
           setSidebarOpen(true);
           setDetailId(null);
-          setStep(3);
           return;
         }
       } catch { /* corrupt cache, fetch fresh */ }
@@ -252,11 +287,10 @@ export default function FluxPage() {
       const snap = await getDocs(query(collection(db, "flux"), ...c, limit(10)));
       const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }) as QuestionDoc);
       // Cache the results
-      try { localStorage.setItem(cacheKey, JSON.stringify(docs)); } catch { /* storage full */ }
+      try { localStorage.setItem(key, JSON.stringify(docs)); } catch { /* storage full */ }
       setQuestions(docs);
       setSidebarOpen(true);
       setDetailId(null);
-      setStep(3);
     } catch (err) {
       setQueryError(err instanceof Error ? err.message : "Failed.");
     } finally {
@@ -264,179 +298,204 @@ export default function FluxPage() {
     }
   };
 
-  const goBack = () => { setStep(1); setTopic(""); setSubtopic(""); };
+  const handleFind = async () => {
+    if (!topic) return;
+    searchedKeyRef.current = searchKey();
+    await fetchQuestions();
+    navigate("/results" + location.search);
+  };
+
+  // Re-run the search when the page is loaded directly on /results (e.g. after
+  // a refresh or when sharing a results link) — component state doesn't survive
+  // a page load, so the query needs re-fetching.
+  useEffect(() => {
+    if (path !== "/results") return;
+    if (!searchParams.get("topic")) return;
+    if (searchedKeyRef.current === searchKey()) return; // already searched this URL
+    searchedKeyRef.current = searchKey();
+    void fetchQuestions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const goBack = () => {
+    setDetailId(null);
+    navigate("/topics" + location.search);
+  };
 
   /* ═══════════════════════════════════════════════
-     STEP 1 — Exam Picker
+     STEP 1 — Exam Picker (/home)
      ═══════════════════════════════════════════════ */
 
-  if (step === 1) {
-    return (
-      <div className="flux">
-        <div className="step1">
-          <div className="step1-hero">
-            <h1 className="step1-title">The question you need is <span className="hl-marker">in here somewhere</span>.</h1>
-            <p className="step1-subtitle">
-              Search thousands of A-Level past-paper questions by topic and exam board. Every one brings its mark scheme and the examiners' commentary along.
-            </p>
-            <p className="story-note">psst — the answers come with the official mark schemes.</p>
+  const step1 = (
+    <div className="flux">
+      <div className="step1">
+        <div className="step1-hero">
+          <h1 className="step1-title">The question you need is <span className="hl-marker">in here somewhere</span>.</h1>
+          <p className="step1-subtitle">
+            Search thousands of A-Level past-paper questions by topic and exam board. Every one brings its mark scheme and the examiners' commentary along.
+          </p>
+          <p className="story-note">psst — the answers come with the official mark schemes.</p>
+        </div>
+
+        <div className="step1-choices">
+          <div className="tier-row">              <button
+            className={`tier-btn ${tier === 'standard' ? 'selected' : ''}`}
+            onClick={() => handleTierSelect('standard')}
+            type="button">
+            <span className="tier-btn-icon" style={{ color: 'var(--accent)' }}><IconBook size={24} /></span>
+            <span className="tier-btn-label">Standard</span>
+            <span className="tier-btn-desc">The trusty A-Level syllabus — Edexcel, OCR, MEI</span>
+          </button>              <button
+            className={`tier-btn ${tier === 'advanced' ? 'selected' : ''}`}
+            onClick={() => handleTierSelect('advanced')}
+            type="button">
+            <span className="tier-btn-icon" style={{ color: 'var(--accent)' }}><IconTrophy size={24} /></span>
+            <span className="tier-btn-label">Advanced</span>
+            <span className="tier-btn-desc">AEA, MAT, MadAsMaths — for the brave</span>
+          </button>
           </div>
 
-          <div className="step1-choices">
-            <div className="tier-row">              <button
-                className={`tier-btn ${tier === 'standard' ? 'selected' : ''}`}
-                onClick={() => handleTierSelect('standard')}
-                type="button">
-                <span className="tier-btn-icon" style={{ color: 'var(--accent)' }}><IconBook size={24} /></span>
-                <span className="tier-btn-label">Standard</span>
-                <span className="tier-btn-desc">The trusty A-Level syllabus — Edexcel, OCR, MEI</span>
-              </button>              <button
-                className={`tier-btn ${tier === 'advanced' ? 'selected' : ''}`}
-                onClick={() => handleTierSelect('advanced')}
-                type="button">
-                <span className="tier-btn-icon" style={{ color: 'var(--accent)' }}><IconTrophy size={24} /></span>
-                <span className="tier-btn-label">Advanced</span>
-                <span className="tier-btn-desc">AEA, MAT, MadAsMaths — for the brave</span>
+          <div className="board-row" key={tier}>
+            {examOptions.map(opt => (
+              <button
+                key={opt.label}
+                className={`board-chip ${exam.label === opt.label ? 'selected' : ''}`}
+                onClick={() => handleExamChange(opt)}
+                type="button"
+              >
+                <span className="board-chip-radio">
+                  <span className="board-chip-radio-dot" />
+                </span>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <button className="cta-btn" onClick={continueToTopics} type="button">
+          Continue <span className="cta-btn-arrow"><IconArrowRight size={16} /></span>
+        </button>
+      </div>
+    </div>
+  );
+
+  /* ═══════════════════════════════════════════════
+     STEP 2 — Topic Browser (/topics)
+     ═══════════════════════════════════════════════ */
+
+  const topicKeys = Object.keys(filteredTopics).sort();
+
+  const step2 = (
+    <div className="flux">
+      <TopProgress visible={loadingQuestions} />
+      <div className="step2">
+        <div className="step2-sidebar" key="s2sidebar">
+          <div className="sidebar-top">
+            <span className="sidebar-label">Topics</span>
+            <span className="pill">{exam.label}</span>
+          </div>
+          <div className="search-box">
+            <input
+              className="search-input"
+              placeholder="Filter topics…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="sidebar-tree">
+            {metaLoading ? (
+              <div style={{ padding: 'var(--sp-4)', display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' }}>
+                <div className="skel" style={{ height: 28 }} />
+                <div className="skel" style={{ height: 28, width: '70%' }} />
+                <div className="skel" style={{ height: 28, width: '50%' }} />
+              </div>
+            ) : topicKeys.length === 0 ? (
+              <p style={{ padding: 'var(--sp-4)', fontSize: '0.83rem', color: 'var(--text-subtle)', textAlign: 'center' }}>
+                {search ? 'Nothing matches — try another word.' : 'No questions for this board yet. The archive is still being written…'}
+              </p>
+            ) : (
+              topicKeys.map(t => {
+                const subs = filteredTopics[t];
+                const isActive = topic === t;
+                return (
+                  <div key={t}>
+                    <div
+                      className={`tree-item ${isActive ? 'active' : ''}`}
+                      onClick={() => {
+                        const next = new URLSearchParams(searchParams);
+                        if (topic === t) next.delete("topic"); else next.set("topic", t);
+                        next.delete("subtopic");
+                        setSearchParams(next);
+                      }}
+                    >
+                      <span>{t}</span>
+                      <span className="tree-badge">{subs.length}</span>
+                    </div>
+                    {isActive && subs.length > 0 && (
+                      <div className="tree-sub">
+                        {subs.map(st => (
+                          <div
+                            key={st}
+                            className={`tree-sub-item ${subtopic === st ? 'selected' : ''}`}
+                            onClick={() => {
+                              const next = new URLSearchParams(searchParams);
+                              if (subtopic === st) next.delete("subtopic"); else next.set("subtopic", st);
+                              setSearchParams(next);
+                            }}
+                          >
+                            <span className="tree-sub-dot" />
+                            {st || "General"}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        <div className="step2-main" key="s2main">
+          <div style={{ textAlign: 'center', maxWidth: 360 }}>
+            <h2 style={{ fontSize: '1.3rem', fontWeight: 600, marginBottom: 'var(--sp-3)', color: 'var(--text)' }}>
+              {topic ? (subtopic ? 'Ready to search' : `Browse ${topic}`) : 'Pick a topic from the shelf'}
+            </h2>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 'var(--sp-5)' }}>
+              {topic
+                ? subtopic
+                  ? `${topic} · ${subtopic || 'General'} from ${exam.label}`
+                  : `Pick a subtopic inside ${topic}, or search the whole topic.`
+                : `Choose a topic from the sidebar and we'll hunt down the matching questions from ${exam.label} papers.`}
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--sp-3)' }}>
+              <button className="back-link" onClick={() => navigate("/home")} type="button">
+                <IconArrowLeft size={14} /> Back
+              </button>
+              <button className="find-btn" onClick={handleFind} disabled={!topic || loadingQuestions} type="button">
+                {loadingQuestions ? <><span className="spinner" /> Searching</> : 'Find Questions'}
               </button>
             </div>
-
-            {tier && (
-              <div className="board-row" key={tier}>
-                {examOptions.map(opt => (
-                  <button
-                    key={opt.label}
-                    className={`board-chip ${exam.label === opt.label ? 'selected' : ''}`}
-                    onClick={() => handleExamChange(opt)}
-                    type="button"
-                  >
-                    <span className="board-chip-radio">
-                      <span className="board-chip-radio-dot" />
-                    </span>
-                    {opt.label}
-                  </button>
-                ))}
+            {queryError && (
+              <p style={{ marginTop: 'var(--sp-3)', fontSize: '0.83rem', color: 'var(--danger)' }}>{queryError}</p>
+            )}
+            {loadingQuestions && (
+              <div className="finding-state" style={{ marginTop: 'var(--sp-6)' }}>
+                <div className="finding-orb" />
+                <p className="finding-hint">{FIND_HINTS[hintIndex]}</p>
+                {elapsed >= 5 && (
+                  <p className="finding-note">Still looking after {elapsed}s — probably the internet's fault, not yours.</p>
+                )}
               </div>
             )}
           </div>
-
-          <button className="cta-btn" onClick={() => setStep(2)} disabled={!tier} type="button">
-            Continue <span className="cta-btn-arrow"><IconArrowRight size={16} /></span>
-          </button>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
 
   /* ═══════════════════════════════════════════════
-     STEP 2 — Topic Browser
-     ═══════════════════════════════════════════════ */
-
-  if (step === 2) {
-    const topicKeys = Object.keys(filteredTopics).sort();
-
-    return (
-      <div className="flux">
-        <TopProgress visible={loadingQuestions} />
-        <div className="step2">
-          <div className="step2-sidebar" key="s2sidebar">
-            <div className="sidebar-top">
-              <span className="sidebar-label">Topics</span>
-              <span className="pill">{exam.label}</span>
-            </div>
-            <div className="search-box">
-              <input
-                className="search-input"
-                placeholder="Filter topics…"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
-            </div>
-            <div className="sidebar-tree">
-              {metaLoading ? (
-                <div style={{ padding: 'var(--sp-4)', display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' }}>
-                  <div className="skel" style={{ height: 28 }} />
-                  <div className="skel" style={{ height: 28, width: '70%' }} />
-                  <div className="skel" style={{ height: 28, width: '50%' }} />
-                </div>
-              ) : topicKeys.length === 0 ? (
-                <p style={{ padding: 'var(--sp-4)', fontSize: '0.83rem', color: 'var(--text-subtle)', textAlign: 'center' }}>
-                  {search ? 'Nothing matches — try another word.' : 'No questions for this board yet. The archive is still being written…'}
-                </p>
-              ) : (
-                topicKeys.map(t => {
-                  const subs = filteredTopics[t];
-                  const isActive = topic === t;
-                  return (
-                    <div key={t}>
-                      <div
-                        className={`tree-item ${isActive ? 'active' : ''}`}
-                        onClick={() => { setTopic(topic === t ? "" : t); setSubtopic(""); }}
-                      >
-                        <span>{t}</span>
-                        <span className="tree-badge">{subs.length}</span>
-                      </div>
-                      {isActive && subs.length > 0 && (
-                        <div className="tree-sub">
-                          {subs.map(st => (
-                            <div
-                              key={st}
-                              className={`tree-sub-item ${subtopic === st ? 'selected' : ''}`}
-                              onClick={() => setSubtopic(subtopic === st ? "" : st)}
-                            >
-                              <span className="tree-sub-dot" />
-                              {st || "General"}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          <div className="step2-main" key="s2main">
-            <div style={{ textAlign: 'center', maxWidth: 360 }}>
-              <h2 style={{ fontSize: '1.3rem', fontWeight: 600, marginBottom: 'var(--sp-3)', color: 'var(--text)' }}>
-                {topic ? (subtopic ? 'Ready to search' : `Browse ${topic}`) : 'Pick a topic from the shelf'}
-              </h2>
-              <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 'var(--sp-5)' }}>
-                {topic
-                  ? subtopic
-                    ? `${topic} · ${subtopic || 'General'} from ${exam.label}`
-                    : `Pick a subtopic inside ${topic}, or search the whole topic.`
-                  : `Choose a topic from the sidebar and we'll hunt down the matching questions from ${exam.label} papers.`}
-              </p>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--sp-3)' }}>
-                <button className="back-link" onClick={goBack} type="button">
-                  <IconArrowLeft size={14} /> Back
-                </button>
-                <button className="find-btn" onClick={handleFind} disabled={!topic || loadingQuestions} type="button">
-                  {loadingQuestions ? <><span className="spinner" /> Searching</> : 'Find Questions'}
-                </button>
-              </div>
-              {queryError && (
-                <p style={{ marginTop: 'var(--sp-3)', fontSize: '0.83rem', color: 'var(--danger)' }}>{queryError}</p>
-              )}
-              {loadingQuestions && (
-                <div className="finding-state" style={{ marginTop: 'var(--sp-6)' }}>
-                  <div className="finding-orb" />
-                  <p className="finding-hint">{FIND_HINTS[hintIndex]}</p>
-                  {elapsed >= 5 && (
-                    <p className="finding-note">Still looking after {elapsed}s — probably the internet's fault, not yours.</p>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* ═══════════════════════════════════════════════
-     STEP 3 — Results
+     STEP 3 — Results (/results)
      Sidebar slides out. Detail pane slides in from right.
      ═══════════════════════════════════════════════ */
 
@@ -444,20 +503,31 @@ export default function FluxPage() {
     setDetailId(qId);
     setDetailTab(tab);
     setSidebarOpen(false);
+    if (tab === "mark_scheme") {
+      setRevealedSteps(prev => ({ ...prev, [qId]: prev[qId] ?? 1 }));
+    }
   };
 
   const handleCloseDetail = () => {
+    // Closing the detail pane always starts this question's reveal journey over.
+    if (detailId) setRevealedSteps(prev => ({ ...prev, [detailId]: 1 }));
     setDetailId(null);
     setSidebarOpen(true);
   };
 
   const handleToggleSidebar = () => {
+    if (detailId) setRevealedSteps(prev => ({ ...prev, [detailId]: 1 }));
     setSidebarOpen(o => !o);
     setDetailId(null); // Closing sidebar auto-closes detail
   };
 
   const handleDetailTabChange = (tab: DetailTab) => {
-    if (detailTab !== tab) setDetailTab(tab);
+    if (detailTab !== tab) {
+      setDetailTab(tab);
+      if (tab === "mark_scheme" && detailId) {
+        setRevealedSteps(prev => ({ ...prev, [detailId]: prev[detailId] ?? 1 }));
+      }
+    }
   };
 
   const detailQuestion = detailId ? questions.find(q => q.id === detailId) : null;
@@ -467,7 +537,15 @@ export default function FluxPage() {
       : (detailQuestion.examiner_report_markdown ?? detailQuestion.examinerNotes ?? ""))
     : "";
 
-  return (
+  const msSteps = detailQuestion
+    ? splitMarkSchemeSteps(detailQuestion.mark_scheme_markdown ?? detailQuestion.markScheme)
+    : ([] as string[]);
+
+  const revealed = detailId && msSteps.length > 1 ? Math.min(revealedSteps[detailId] ?? 1, msSteps.length) : 0;
+  const allRevealed = revealed > 0 && revealed >= msSteps.length;
+  const nextStepNum = !allRevealed && revealed > 0 ? stepNumber(msSteps[revealed] ?? "") : null;
+
+  const step3 = (
     <div className="flux">
       <div className="step3" key="step3">
         {/* Sidebar */}
@@ -509,60 +587,18 @@ export default function FluxPage() {
               </div>
             ) : (
               <div className="results-list">
-                {questions.map(q => {
-                  const board = String(q.board || '').trim();
-                  const yr = String(q.year || '').trim();
-                  const paper = String(q.paper || '').trim();
-                  const qn = String(q.question_number || q.question || '').trim();
-                  const meta = [board, yr, paper, qn ? `Q${qn}` : ''].filter(Boolean).join(' ');
-                  const problem = q.problem_markdown ?? q.question ?? "";
-                  const ms = q.mark_scheme_markdown ?? q.markScheme ?? "";
-                  const er = q.examiner_report_markdown ?? q.examinerNotes ?? "";
-                  const isDetailActive = detailId === q.id;
-
-                  return (
-                    <div key={q.id} className="qcard">
-                      <div className="qcard-head">
-                        <span className="qcard-topic">
-                          {q.topic}{q.subtopic ? ` · ${q.subtopic || 'General'}` : ''}
-                        </span>
-                        <span className="qcard-meta">{meta}</span>
-                      </div>
-                      <div className="qcard-body">
-                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                          {fmt(problem)}
-                        </ReactMarkdown>
-                      </div>
-
-                      {(ms || er) && (
-                        <div className="qcard-actions">
-                          {ms && (
-                            <button
-                              className={`qcard-action ${isDetailActive && detailTab === "mark_scheme" ? "active" : ""}`}
-                              onClick={() => isDetailActive && detailTab === "mark_scheme"
-                                ? handleCloseDetail()
-                                : handleOpenDetail(q.id, "mark_scheme")}
-                              type="button"
-                            >
-                              <IconClipboard size={14} /> Mark Scheme
-                            </button>
-                          )}
-                          {er && (
-                            <button
-                              className={`qcard-action ${isDetailActive && detailTab === "examiner_report" ? "active" : ""}`}
-                              onClick={() => isDetailActive && detailTab === "examiner_report"
-                                ? handleCloseDetail()
-                                : handleOpenDetail(q.id, "examiner_report")}
-                              type="button"
-                            >
-                              <IconFileText size={14} /> Examiner Report
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                {questions.map(q => (
+                  <QuestionCard
+                    key={q.id}
+                    q={q}
+                    detailId={detailId}
+                    detailTab={detailTab}
+                    isSelected={isSelected(q.id)}
+                    onToggle={() => toggle(q)}
+                    onOpenDetail={handleOpenDetail}
+                    onCloseDetail={handleCloseDetail}
+                  />
+                ))}
               </div>
             )}
           </div>
@@ -595,12 +631,60 @@ export default function FluxPage() {
               </div>
               <div className="detail-content">
                 <div key={`${detailId}-${detailTab}`} className="detail-fade-in">
-                  {detailContent ? (
-                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                      {fmt(detailContent)}
-                    </ReactMarkdown>
+                  {detailTab === "mark_scheme" ? (
+                    detailContent ? (
+                      msSteps.length <= 1 ? (
+                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                          {fmt(detailContent)}
+                        </ReactMarkdown>
+                      ) : (
+                        <div className="ms-reveal">
+                          {msSteps.slice(0, revealed).map((step, i) => (
+                            <div
+                              key={i}
+                              className="ms-step ms-step-reveal"
+                              style={{ "--ms-delay": `${Math.min(i, 7) * 55}ms` } as React.CSSProperties}
+                            >
+                              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                                {fmt(step)}
+                              </ReactMarkdown>
+                            </div>
+                          ))}
+                          <div className="ms-reveal-actions">
+                            {allRevealed ? (
+                              <span className="ms-reveal-done">✓ All steps revealed</span>
+                            ) : (
+                              <button
+                                className="ms-reveal-btn"
+                                onClick={() => setRevealedSteps(prev => ({ ...prev, [detailId!]: revealed + 1 }))}
+                                type="button"
+                              >
+                                {nextStepNum ? `Reveal Step ${nextStepNum}` : "Reveal next step"}
+                              </button>
+                            )}
+                            {!allRevealed && (
+                              <button
+                                className="ms-reveal-all"
+                                onClick={() => setRevealedSteps(prev => ({ ...prev, [detailId!]: msSteps.length }))}
+                                type="button"
+                              >
+                                Reveal all
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    ) : (
+                      <div style={{ opacity: 0.5 }}>Not available for this question.</div>
+                    )
                   ) : (
-                    <div style={{ opacity: 0.5 }}>Not available for this question.</div>
+                    detailContent ? (
+                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                        {fmt(detailContent)}
+                      </ReactMarkdown>
+                    ) : (
+                      <div style={{ opacity: 0.5 }}>Not available for this question.</div>
+                    )
                   )}
                 </div>
               </div>
@@ -608,6 +692,86 @@ export default function FluxPage() {
           )}
         </div>
       </div>
+    </div>
+  );
+
+  return step === 1 ? step1 : step === 2 ? step2 : step3;
+}
+
+/* ─── Question card (results list) ──────────────────────────── */
+
+interface QuestionCardProps {
+  q: QuestionDoc;
+  detailId: string | null;
+  detailTab: DetailTab;
+  isSelected: boolean;
+  onToggle: () => void;
+  onOpenDetail: (qId: string, tab: DetailTab) => void;
+  onCloseDetail: () => void;
+}
+
+function QuestionCard({ q, detailId, detailTab, isSelected, onToggle, onOpenDetail, onCloseDetail }: QuestionCardProps) {
+  const board = String(q.board || '').trim();
+  const yr = String(q.year || '').trim();
+  const paper = String(q.paper || '').trim();
+  const qn = String(q.question_number || q.question || '').trim();
+  const meta = [board, yr, paper, qn ? `Q${qn}` : ''].filter(Boolean).join(' ');
+  const problem = q.problem_markdown ?? q.question ?? "";
+  const ms = q.mark_scheme_markdown ?? q.markScheme ?? "";
+  const er = q.examiner_report_markdown ?? q.examinerNotes ?? "";
+  const isDetailActive = detailId === q.id;
+
+  return (
+    <div className="qcard">
+      <div className="qcard-head">
+        <span className="qcard-topic">
+          {q.topic}{q.subtopic ? ` · ${q.subtopic || 'General'}` : ''}
+        </span>
+        <div className="qcard-head-right">
+          <span className="qcard-meta">{meta}</span>
+          <button
+            className={`briefcase-add ${isSelected ? "selected" : ""}`}
+            onClick={onToggle}
+            aria-pressed={isSelected}
+            title={isSelected ? "Remove from briefcase" : "Add to briefcase"}
+            type="button"
+          >
+            <BriefcaseIcon size={15} />
+          </button>
+        </div>
+      </div>
+      <div className="qcard-body">
+        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+          {fmt(problem)}
+        </ReactMarkdown>
+      </div>
+
+      {(ms || er) && (
+        <div className="qcard-actions">
+          {ms && (
+            <button
+              className={`qcard-action ${isDetailActive && detailTab === "mark_scheme" ? "active" : ""}`}
+              onClick={() => isDetailActive && detailTab === "mark_scheme"
+                ? onCloseDetail()
+                : onOpenDetail(q.id, "mark_scheme")}
+              type="button"
+            >
+              <IconClipboard size={14} /> Mark Scheme
+            </button>
+          )}
+          {er && (
+            <button
+              className={`qcard-action ${isDetailActive && detailTab === "examiner_report" ? "active" : ""}`}
+              onClick={() => isDetailActive && detailTab === "examiner_report"
+                ? onCloseDetail()
+                : onOpenDetail(q.id, "examiner_report")}
+              type="button"
+            >
+              <IconFileText size={14} /> Examiner Report
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
