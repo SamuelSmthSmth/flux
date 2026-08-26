@@ -34,7 +34,7 @@ export function BriefcaseDrawer({ onExport }: BriefcaseDrawerProps) {
           <div className="briefcase-header">
             <div className="briefcase-title-row">
               <BriefcaseIcon size={18} />
-              <h3 className="briefcase-title">The Briefcase</h3>
+              <h3 className="briefcase-title">Briefcase</h3>
             </div>
             <button className="briefcase-close" onClick={close} type="button" title="Close">
               ✕
@@ -95,7 +95,7 @@ export function BriefcaseDrawer({ onExport }: BriefcaseDrawerProps) {
               onClick={() => setModalOpen(true)}
               type="button"
             >
-              <BriefcaseIcon size={15} /> Create / Export PDF
+              <BriefcaseIcon size={15} /> Export Questions
             </button>
             {items.length > 0 && (
               <button className="briefcase-clear" onClick={clear} type="button">
@@ -116,14 +116,14 @@ export function BriefcaseDrawer({ onExport }: BriefcaseDrawerProps) {
             aria-label="Print or export PDF"
           >
             <h3 className="briefcase-modal-title">Print / Export PDF</h3>
-            <p className="briefcase-modal-sub">Select your preferred cover page style.</p>
+            <p className="briefcase-modal-sub">Select your preferred export style.</p>
 
             <div className="cover-cards">
               <button className="cover-card" onClick={() => handlePick("eco")} type="button">
                 <div className="cover-thumb cover-thumb-eco">
                   <span className="cover-thumb-title">Worksheet</span>
                 </div>
-                <strong className="cover-card-name">Eco Print</strong>
+                <strong className="cover-card-name">Simple Print</strong>
                 <span className="cover-card-desc">White cover — a simple worksheet</span>
               </button>
               <button className="cover-card" onClick={() => handlePick("official")} type="button">
@@ -132,7 +132,7 @@ export function BriefcaseDrawer({ onExport }: BriefcaseDrawerProps) {
                   <span className="paper-thumb-box">FLUX<br /><b>ADVANCED<br />MATHEMATICS</b></span>
                   <span className="paper-thumb-lines" />
                 </div>
-                <strong className="cover-card-name">Official Paper</strong>
+                <strong className="cover-card-name">Practice Paper</strong>
                 <span className="cover-card-desc">Exam-board layout — candidate boxes, ruled space and marks</span>
               </button>
             </div>
@@ -143,7 +143,7 @@ export function BriefcaseDrawer({ onExport }: BriefcaseDrawerProps) {
                 checked={includeAnswers}
                 onChange={e => setIncludeAnswers(e.target.checked)}
               />
-              <span>Include mark scheme pages at the end</span>
+              <span>Include mark scheme</span>
             </label>
 
             <div className="briefcase-modal-actions">

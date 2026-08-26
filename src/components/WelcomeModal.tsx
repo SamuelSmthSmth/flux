@@ -13,9 +13,9 @@ const FALLBACK: FallbackEntry[] = [
 ];
 
 const STEPS = [
-  { num: "1", title: "Pick your tier", desc: "Standard keeps you on the A-Level syllabus — Edexcel, OCR, MEI. Advanced unlocks AEA, MAT and MadAsMaths for the brave." },
-  { num: "2", title: "Choose a topic", desc: "Wander the topic tree, filter by name, and drill into a subtopic — or search a whole topic at once." },
-  { num: "3", title: "Find questions", desc: "Every question brings its mark scheme and the examiners' report along — one click away." },
+  { num: "1", title: "Search for topics", desc: "Filter through a range of exam boards and select topics that each exam board provides." },
+  { num: "2", title: "Browse the library", desc: "Save questions for later, or self study with the official mark schemes and examiner reports." },
+  { num: "3", title: "Test yourself", desc: "Customise and compile worksheets and realistic practice papers for the exam season." },
 ];
 
 function formatDate(iso: string) {
@@ -94,7 +94,7 @@ export default function WelcomeModal() {
             <span className="welcome-beta">BETA</span>
           </div>
           <p className="welcome-subtitle">
-            A question bank for advanced mathematics — every past-paper question, mark scheme and examiner note, gathered in one place.
+            A tagged and curated library of maths exam questions - past papers, mark schemes and examiner reports, but better :D
           </p>
         </div>
 
@@ -137,7 +137,7 @@ export default function WelcomeModal() {
 
         <div className="welcome-warning">
           <span>—</span>
-          <p>Flux is still finding its feet. Some corners of the archive are missing, and things may shift without warning.</p>
+          <p>Flux is still finding its feet lol. Some exam boards in the library are completely empty, and things may randomly break.</p>
         </div>
 
         <div className="welcome-footer">

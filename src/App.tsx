@@ -172,6 +172,53 @@ function BriefcaseButton() {
   );
 }
 
+function FluxLoader() {
+  const [variant] = useState<IntroVariant>(() => {
+    return INTRO_VARIANTS[Math.floor(Math.random() * INTRO_VARIANTS.length)];
+  });
+
+  const cfg = VARIANT_CONFIG[variant];
+  const letterDuration = Math.round(cfg.duration * 0.45);
+  const letterStagger = Math.max(30, Math.round(cfg.stagger * 0.5));
+  const settleMs = letterDuration + letterStagger * 3;
+  const underlineDelay = (settleMs / 1000).toFixed(3);
+
+  return (
+    <div className="flux-intro" data-intro={variant} aria-hidden="true" style={{ position: 'relative', background: 'transparent', height: '120px' }}>
+      <div className="flux-intro-stage" style={{ transform: 'scale(0.5)' }}>
+        <div className="flux-intro-word">
+          {"FLUX".split("").map((letter, i) => {
+            const rx = Math.sin(i * 1.5) * 2;
+            const ry = Math.cos(i * 2.1) * 2;
+            const rz = Math.sin(i * 3.7);
+            return (
+              <span
+                key={i}
+                className="flux-intro-letter"
+                style={{
+                  animationDelay: `${i * letterStagger}ms`,
+                  '--ldur': `${letterDuration}ms`,
+                  '--rx': rx,
+                  '--ry': ry,
+                  '--rz': rz,
+                  '--tilt': `${-6 + i * 2.4}deg`,
+                  '--jitter': `${8 + i * 4}px`,
+                } as React.CSSProperties}
+              >
+                {letter}
+              </span>
+            );
+          })}
+          {variant === "typewrite" && <span className="flux-intro-caret" aria-hidden="true" />}
+        </div>
+        {variant === "scribble" && (
+          <div className="flux-intro-underline" style={{ animationDelay: `${underlineDelay}s` }} />
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Paper route (/paper) ──────────────────────────────────── */
 
 function PaperPage() {
@@ -179,6 +226,25 @@ function PaperPage() {
   const navigate = useNavigate();
   const style: CoverStyle = params.get("style") === "eco" ? "eco" : "official";
   const includeAnswers = params.get("answers") !== "0";
+
+  const [isGenerating, setIsGenerating] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsGenerating(false), 50);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (isGenerating) {
+    return (
+      <div className="worksheet-screen">
+        <div className="worksheet-empty" style={{ gap: '0' }}>
+          <FluxLoader />
+          <p className="worksheet-empty-title" style={{ color: 'var(--text)', margin: 0, fontSize: '1.1rem' }}>Generating paper...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <WorksheetView
       style={style}

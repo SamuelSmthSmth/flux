@@ -327,11 +327,11 @@ export default function FluxPage() {
     <div className="flux">
       <div className="step1">
         <div className="step1-hero">
-          <h1 className="step1-title">The question you need is <span className="hl-marker">in here somewhere</span>.</h1>
+          <h1 className="step1-title">The only perfect exam board filter <span className="hl-marker">in existence</span>.</h1>
           <p className="step1-subtitle">
-            Search thousands of A-Level past-paper questions by topic and exam board. Every one brings its mark scheme and the examiners' commentary along.
+            Quite literally THE tool for any maths student or teacher during the exam season. Curated by students, for students.
           </p>
-          <p className="story-note">psst — the answers come with the official mark schemes.</p>
+          <p className="story-note">psst — i know where you live so if you're mean I'll find you :p...</p>
         </div>
 
         <div className="step1-choices">
@@ -341,14 +341,14 @@ export default function FluxPage() {
             type="button">
             <span className="tier-btn-icon" style={{ color: 'var(--accent)' }}><IconBook size={24} /></span>
             <span className="tier-btn-label">Standard</span>
-            <span className="tier-btn-desc">The trusty A-Level syllabus — Edexcel, OCR, MEI</span>
+            <span className="tier-btn-desc">The expected A-Level syllabus — Edexcel, OCR, MEI, etc</span>
           </button>              <button
             className={`tier-btn ${tier === 'advanced' ? 'selected' : ''}`}
             onClick={() => handleTierSelect('advanced')}
             type="button">
             <span className="tier-btn-icon" style={{ color: 'var(--accent)' }}><IconTrophy size={24} /></span>
             <span className="tier-btn-label">Advanced</span>
-            <span className="tier-btn-desc">AEA, MAT, MadAsMaths — for the brave</span>
+            <span className="tier-btn-desc">More niche or advanced question sets</span>
           </button>
           </div>
 
@@ -463,7 +463,7 @@ export default function FluxPage() {
                 ? subtopic
                   ? `${topic} · ${subtopic || 'General'} from ${exam.label}`
                   : `Pick a subtopic inside ${topic}, or search the whole topic.`
-                : `Choose a topic from the sidebar and we'll hunt down the matching questions from ${exam.label} papers.`}
+                : `Only topics found in ${exam.label} papers will be shown.`}
             </p>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--sp-3)' }}>
               <button className="back-link" onClick={() => navigate("/home")} type="button">
