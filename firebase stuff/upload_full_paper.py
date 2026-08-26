@@ -1,26 +1,38 @@
 import os
 import re
 import json
+import argparse
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# --- CONFIGURATION ---
-MARKDOWN_DIR = "./data/flux"
-TOPICS_FILE = "all_topics_database.json"
-SERVICE_ACCOUNT_PATH = "serviceAccountKey.json"
+# --- CONFIGURATION (overridable via CLI) ---
+DEFAULT_MARKDOWN_DIR = "./data/flux"
+DEFAULT_TOPICS_FILE = "all_topics_database.json"
+DEFAULT_SERVICE_ACCOUNT = "serviceAccountKey.json"
 
-# Initialize Firebase
-cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
-firebase_admin.initialize_app(cred)
-db = firestore.client()
+_db = None
+_topics_cache = None
+
+
+def get_db(service_account_path=DEFAULT_SERVICE_ACCOUNT):
+    """Lazily initialise the Firestore client (one cert, one app)."""
+    global _db
+    if _db is None:
+        cred = credentials.Certificate(service_account_path)
+        firebase_admin.initialize_app(cred)
+        _db = firestore.client()
+    return _db
+
+
+def load_topics(topics_file=DEFAULT_TOPICS_FILE) -> dict:
+    """Lazily load the topic taxonomy used by the classify() fallback."""
+    global _topics_cache
+    if _topics_cache is None:
+        with open(topics_file, 'r') as f:
+            _topics_cache = json.load(f)
+    return _topics_cache.get("topics", {})
 
 # --- CLASSIFICATION LOGIC ---
-# --- CLASSIFICATION LOGIC ---
-with open(TOPICS_FILE, 'r') as f:
-    topics_db = json.load(f)
-
-topics = topics_db.get("topics", {})
-
 OVERRIDE_MAP = {
     # 2010
     ("Edexcel", "AEA", "2010", "P1", "1"): ("Exponentials and Logarithms", "Laws of logarithms"),
@@ -145,6 +157,7 @@ def classify(text, board=None, subBoard=None, year=None, paper=None, q_num=None)
         return "Functions and Graphs", "Composite functions"
 
     # Default fallback to original behavior
+    topics = load_topics()
     for topic, subtopics in topics.items():
         for subtopic in subtopics:
             if len(subtopic) > 4 and subtopic.lower() in text_lower:
@@ -194,14 +207,30 @@ def clean_text(content):
     return new_content.strip()
 
 # --- MAIN PARSING PIPELINE ---
-def process_full_papers():
-    if not os.path.exists(MARKDOWN_DIR):
-        print(f"Directory {MARKDOWN_DIR} does not exist.")
+def process_full_papers(only=None, markdown_dir=DEFAULT_MARKDOWN_DIR,
+                        topics_file=DEFAULT_TOPICS_FILE,
+                        service_account=DEFAULT_SERVICE_ACCOUNT):
+    if not os.path.exists(markdown_dir):
+        print(f"Directory {markdown_dir} does not exist.")
         return
-        
-    print(f"🚀 Scanning '{MARKDOWN_DIR}' for full papers (ignoring split _Q files)...\n")
-    
-    for filename in sorted(os.listdir(MARKDOWN_DIR)):
+
+    db = get_db(service_account)
+    load_topics(topics_file)
+
+    print(f"🚀 Scanning '{markdown_dir}' for full papers (ignoring split _Q files)...\n")
+
+    filenames = sorted(os.listdir(markdown_dir))
+    if only:
+        only_name = os.path.basename(only)
+        if os.path.isabs(only):
+            filenames = [f for f in filenames if f == only_name]
+        else:
+            filenames = [f for f in filenames if f == only]
+        if not filenames:
+            print(f"⚠️ --only '{only}' matched nothing in {markdown_dir} (expected a filename like Edexcel_A-Level_2023_P1.md).")
+            return
+
+    for filename in filenames:
         if not filename.endswith('.md'):
             continue
             
@@ -209,7 +238,7 @@ def process_full_papers():
         if '_Q' in filename:
             continue
             
-        file_path = os.path.join(MARKDOWN_DIR, filename)
+        file_path = os.path.join(markdown_dir, filename)
         print(f"\n📄 Processing Full Paper: {filename}")
         
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -312,7 +341,10 @@ def process_full_papers():
             print(f"⚠️ No questions found in {filename}.")
             continue
 
-        # Upload each found question
+        # Upload each found question — batched so a whole paper commits in
+        # one round trip (and atomically). Papers are ~10-15 docs, far below
+        # the 500-write batch limit.
+        batch = db.batch()
         for q_num, data in sorted(questions_data.items(), key=lambda x: int(x[0])):
             doc_id = f"{board}_{subBoard}_{year}_{paper}_Q{q_num}"
             
@@ -341,9 +373,21 @@ def process_full_papers():
             }
             
             print(f"📦 Uploading Document: {doc_id} | Topic: {topic} | Subtopic: {subtopic}")
-            db.collection("flux").document(doc_id).set(payload)
-            
+            batch.set(db.collection("flux").document(doc_id), payload)
+        batch.commit()
     print("\n🎉 Full paper processing and upload completed!")
 
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--only", help="upload only this single .md file (filename in the markdown dir)")
+    ap.add_argument("--markdown-dir", default=DEFAULT_MARKDOWN_DIR, help=f"directory of full-paper .md files (default: {DEFAULT_MARKDOWN_DIR})")
+    ap.add_argument("--topics", default=DEFAULT_TOPICS_FILE, help=f"topic taxonomy JSON (default: {DEFAULT_TOPICS_FILE})")
+    ap.add_argument("--service-account", default=DEFAULT_SERVICE_ACCOUNT, help=f"Firebase service-account key JSON (default: {DEFAULT_SERVICE_ACCOUNT})")
+    args = ap.parse_args()
+    process_full_papers(only=args.only, markdown_dir=args.markdown_dir,
+                        topics_file=args.topics, service_account=args.service_account)
+
+
 if __name__ == "__main__":
-    process_full_papers()
+    main()

@@ -25,12 +25,18 @@ TOPICS_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "firebase stuf
 FORBIDDEN = [
     "Code snippet",
     "Graphing calculator input",
-    "```",
     "$$$",
     "TODO",
     "FIXME",
     "OCR",
+    "i.imgur.com",  # fake image placeholders instead of **Figure N** _(desc)_
+    "example.png",
 ]
+
+# Only ```tikz fences are allowed (they become TikZ diagrams); any other
+# triple-backtick block is an OCR/AI artifact.
+FENCE_RE = re.compile(r"^```(tikz)?\s*$")
+
 
 Q_RE = re.compile(r"^###\s*\**Question\s+(\d+)", re.IGNORECASE)
 MS_RE = re.compile(r"^###\s*\**Mark Scheme(?:\s+(\d+))?", re.IGNORECASE)
@@ -54,6 +60,7 @@ def validate_file(path: str, taxonomy: dict) -> tuple[list[str], list[str]]:
     fm_topics = []  # (topic, subtopic) from frontmatter blocks
     pending_fm = None
     current_q = None
+    fence_open = False
 
     i = 0
     while i < len(lines):
@@ -78,7 +85,9 @@ def validate_file(path: str, taxonomy: dict) -> tuple[list[str], list[str]]:
                 fm_topics.append(pending_fm)
                 pending_fm = None
             else:
-                errors.append(f"line {i+1}: Question {current_q} has no frontmatter topic block before it")
+                # Optional: the uploader's classify() assigns topic/subtopic
+                # automatically when frontmatter is absent.
+                warnings.append(f"line {i+1}: Question {current_q} has no frontmatter topic block — uploader will classify it")
         elif m := MS_RE.match(line):
             ms_nums.append(m.group(1) or current_q)
         elif m := ER_RE.match(line):
@@ -88,11 +97,28 @@ def validate_file(path: str, taxonomy: dict) -> tuple[list[str], list[str]]:
             if bad in line:
                 errors.append(f"line {i+1}: forbidden artifact '{bad}'")
 
+        # tikz fence check — a fence must be ```tikz, and they must balance
+        if "```" in line:
+            fm = FENCE_RE.match(line.strip())
+            if not fm:
+                errors.append(f"line {i+1}: invalid fence '{line.strip()[:20]}' — only ```tikz fences are allowed")
+            elif fm.group(1) == "tikz":
+                if fence_open:
+                    errors.append(f"line {i+1}: unclosed ```tikz fence")
+                fence_open = True
+            else:  # closing fence (bare ```)
+                if not fence_open:
+                    errors.append(f"line {i+1}: closing ``` with no open ```tikz fence")
+                fence_open = False
+
         # math delimiter check (per line, ignoring $$...$$ which contains 4 $ chars in pairs)
         dollar_count = line.count("$")
         if dollar_count % 2 != 0:
             errors.append(f"line {i+1}: odd number of $ delimiters ({dollar_count})")
         i += 1
+
+    if fence_open:
+        errors.append("unclosed ```tikz fence at end of file")
 
     if not q_nums:
         errors.append("no ### Question headers found")

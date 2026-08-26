@@ -1,10 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
 import { useBriefcase } from "../briefcase-context";
-import { fmt, mdToTex } from "../lib/markdown";
+import { mdToTex } from "../lib/markdown";
 import { splitMarkSchemeSteps } from "../lib/msSteps";
+import { extractTotalMarks, parseQuestionParts } from "../lib/questionParts";
+import type { QuestionPart } from "../lib/questionParts";
+import { FigureAwareMarkdown } from "./FluxMarkdown";
 import type { BriefcaseItem } from "../briefcase-context";
 import type { CoverStyle } from "./BriefcaseDrawer";
 
@@ -20,11 +20,6 @@ export const A4_H = 1123;
 
 function escapeTex(s: string): string {
   return s.replace(/([&%$#_{}])/g, "\\$1");
-}
-
-function questionMarkValue(markdown?: string): number {
-  const value = markdown?.match(/\(Total\s+(\d+)\s+marks?\)/i)?.[1];
-  return value ? Number(value) : 0;
 }
 
 /** Assembles a LaTeX document from the briefcase contents. */
@@ -81,122 +76,9 @@ function downloadTex(items: BriefcaseItem[], includeAnswers: boolean) {
   URL.revokeObjectURL(url);
 }
 
-function Markdown({ children }: { children?: string }) {
-  return (
-    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-      {fmt(children)}
-    </ReactMarkdown>
-  );
-}
-
-/* ────────────────────────────────────────────────────────────────
-   Problem parsing: split a question's markdown into its parts so we
-   can right-align each part's marks like a real exam paper.
-   Handles the archive's bold markers (** (a) **) and plain (a)
-   markers, ignoring anything inside $…$ / $$…$$ math.
-   ──────────────────────────────────────────────────────────────── */
-
-interface QuestionPart {
-  label: string;   // "(a)"
-  body: string;    // markdown content
-  marks: number | null;
-}
-
-/** Hides inline/display math so parens inside equations never match as part labels. */
-function hideMath(text: string): { clean: string; restore: (s: string) => string } {
-  const spans: string[] = [];
-  const clean = text
-    .replace(/\$\$[\s\S]*?\$\$/g, m => { spans.push(m); return `\uE000${spans.length - 1}\uE001`; })
-    .replace(/\$[^$\n]+\$/g, m => { spans.push(m); return `\uE000${spans.length - 1}\uE001`; });
-  const restore = (s: string) => s.replace(/\uE000(\d+)\uE001/g, (_, i) => spans[Number(i)] ?? "");
-  return { clean, restore };
-}
-
-function parseQuestionParts(problem?: string): QuestionPart[] {
-  const text = (problem ?? "").trim();
-  if (!text) return [];
-  const { clean, restore } = hideMath(text);
-
-  const find = (re: RegExp): { label: string; start: number }[] => {
-    const out: { label: string; start: number }[] = [];
-    re.lastIndex = 0;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(clean)) !== null) out.push({ label: m[1], start: m.index });
-    return out;
-  };
-
-  // Prefer the archive's bold markers; only fall back to plain text when the
-  // bold form isn't used at all (e.g. hand-written test papers).
-  const boldChunks = find(/\*\*\(([a-zA-Z]+)\)\*\*/g);
-  const chunks = boldChunks.length >= 2 ? boldChunks : find(/\(([a-z]|[ivx]{1,3})\)/g);
-
-  if (chunks.length === 0) return [{ label: "", body: text, marks: null }];
-
-  const parts: QuestionPart[] = [];
-  const intro = clean.slice(0, chunks[0].start).trim();
-  if (intro) parts.push({ label: "", body: restore(intro), marks: null });
-
-  chunks.forEach((chunk, i) => {
-    const end = i + 1 < chunks.length ? chunks[i + 1].start : clean.length;
-    let body = clean.slice(chunk.start, end);
-    // Drop a trailing "(Total N marks)" marker.
-    body = body.replace(/\*{0,2}\(Total\s+\d+\s+marks?\)\*{0,2}\s*$/i, "");
-    // The per-part mark is the LAST "(N)" in the chunk — the archive often
-    // prints it right after the part, before the next part's lead-in text.
-    const markRe = /\*{0,2}\((\d+)\)\*{0,2}/g;
-    let markMatch: RegExpExecArray | null = null;
-    let mm: RegExpExecArray | null;
-    while ((mm = markRe.exec(body)) !== null) markMatch = mm;
-    const marks = markMatch ? Number(markMatch[1]) : null;
-    if (markMatch) body = body.slice(0, markMatch.index) + body.slice(markMatch.index + markMatch[0].length);
-    // Strip the leading part label (bold or plain).
-    body = body.replace(/\*{0,2}\([a-zA-Z]+\)\*{0,2}/, "").trim();
-    parts.push({ label: `(${chunk.label})`, body: restore(body), marks });
-  });
-  return parts;
-}
-
-/* ────────────────────────────────────────────────────────────────
-   Figures — the archive's questions reference "**Figure N** _(desc)_",
-   so we render a proper framed figure box in their place.
-   ──────────────────────────────────────────────────────────────── */
-
-type Segment =
-  | { type: "md"; text: string }
-  | { type: "figure"; number: string; description: string };
-
-function splitFigures(text: string): Segment[] {
-  const re = /\*\*Figure\s+(\d+)\*\*\s*_\(([\s\S]*?)\)\.?_/g;
-  const out: Segment[] = [];
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) out.push({ type: "md", text: text.slice(last, m.index) });
-    out.push({ type: "figure", number: m[1], description: m[2].trim() });
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) out.push({ type: "md", text: text.slice(last) });
-  return out.length > 0 ? out : [{ type: "md", text }];
-}
-
-function FigureAwareMarkdown({ children }: { children?: string }) {
-  const segments = useMemo(() => splitFigures(fmt(children)), [children]);
-  if (segments.length === 1 && segments[0].type === "md") return <Markdown>{children}</Markdown>;
-  return (
-    <>
-      {segments.map((seg, i) =>
-        seg.type === "figure" ? (
-          <figure key={i} className="official-figure">
-            <div className="official-figure-area"><span>{seg.description}</span></div>
-            <figcaption>Figure {seg.number}</figcaption>
-          </figure>
-        ) : (
-          <div key={i}><Markdown>{seg.text}</Markdown></div>
-        )
-      )}
-    </>
-  );
-}
+/* ─── Problem parsing and figure handling live in the shared modules:
+     ../lib/questionParts (parts + marks) and ./FluxMarkdown (markdown +
+     figures with TikZ-above-description pairing). ─── */
 
 /* ────────────────────────────────────────────────────────────────
    Barcode — a deterministic Code-128-style SVG derived from the
@@ -269,7 +151,7 @@ function OfficialCover({ date, items, totalMarks, paperCode }: { date: string; i
         <div className="official-marks-grid">
           <span className="official-marks-grid-label">Question marks</span>
           {items.map((item, i) => (
-            <span key={item.id} className="official-marks-grid-cell">Q{i + 1} · {questionMarkValue(item.problem_markdown) || "–"}</span>
+            <span key={item.id} className="official-marks-grid-cell">Q{i + 1} · {extractTotalMarks(item.problem_markdown) || "–"}</span>
           ))}
         </div>
 
@@ -325,7 +207,7 @@ function OfficialQuestion({ item, number, paperCode, last, sources }: {
   item: BriefcaseItem; number: number; paperCode: string; last: boolean; sources: string;
 }) {
   const parts = useMemo(() => parseQuestionParts(item.problem_markdown), [item.problem_markdown]);
-  const total = questionMarkValue(item.problem_markdown);
+  const total = extractTotalMarks(item.problem_markdown) ?? 0;
   const measurerRef = useRef<HTMLDivElement>(null);
   const [pages, setPages] = useState<QPage[] | null>(null);
 
@@ -394,7 +276,7 @@ function OfficialQuestion({ item, number, paperCode, last, sources }: {
       {part.body && (
         <div className="official-part-body">
           {part.label && <strong className="official-part-label">{part.label}</strong>}{" "}
-          <FigureAwareMarkdown>{part.body}</FigureAwareMarkdown>
+          <FigureAwareMarkdown boxed>{part.body}</FigureAwareMarkdown>
         </div>
       )}
       {part.marks != null && <span className="official-part-marks">({part.marks})</span>}
@@ -425,7 +307,7 @@ function OfficialQuestion({ item, number, paperCode, last, sources }: {
         {parts.map((part, i) => (
           <div key={i} className="official-qpart">
             {part.label && <strong className="official-part-label">{part.label}</strong>}{" "}
-            <FigureAwareMarkdown>{part.body}</FigureAwareMarkdown>
+            <FigureAwareMarkdown boxed>{part.body}</FigureAwareMarkdown>
           </div>
         ))}
       </div>
@@ -552,7 +434,7 @@ function OfficialMarkScheme({ items, paperCode }: { items: BriefcaseItem[]; pape
           <div key={gi}>
             <h3 className="official-ms-title">Question {gi + 1} — Mark Scheme</h3>
             {group.map((s, si) => (
-              <div key={si} className="official-ms-step"><Markdown>{s}</Markdown></div>
+              <div key={si} className="official-ms-step"><FigureAwareMarkdown boxed>{s}</FigureAwareMarkdown></div>
             ))}
           </div>
         ))}
@@ -569,7 +451,7 @@ function OfficialMarkScheme({ items, paperCode }: { items: BriefcaseItem[]; pape
             {pg.steps.length === 0
               ? <p className="official-ms-step">Not available.</p>
               : pg.steps.map((step, j) => (
-                <div key={j} className="official-ms-step"><Markdown>{step}</Markdown></div>
+                <div key={j} className="official-ms-step"><FigureAwareMarkdown boxed>{step}</FigureAwareMarkdown></div>
               ))}
           </div>
           <div className="official-question-footer">
@@ -659,7 +541,7 @@ export function WorksheetView({ style, includeAnswers, onClose }: WorksheetViewP
               <section key={item.id} className="ws-question">
                 <div className="ws-q-head"><span className="ws-q-num">Question {idx + 1}</span><span className="ws-q-src">{item.title}</span></div>
                 {item.topic && <div className="ws-q-topic">{item.topic}{item.subtopic ? ` · ${item.subtopic}` : ""}</div>}
-                <div className="ws-q-body"><Markdown>{item.problem_markdown}</Markdown></div>
+                <div className="ws-q-body"><FigureAwareMarkdown>{item.problem_markdown}</FigureAwareMarkdown></div>
                 <div className="ws-q-space" />
               </section>
             ))}
@@ -670,7 +552,7 @@ export function WorksheetView({ style, includeAnswers, onClose }: WorksheetViewP
               date={date}
               items={items}
               paperCode={paperCode}
-              totalMarks={items.reduce((sum, item) => sum + questionMarkValue(item.problem_markdown), 0)}
+              totalMarks={items.reduce((sum, item) => sum + (extractTotalMarks(item.problem_markdown) ?? 0), 0)}
             />
             {items.map((item, idx) => (
               <OfficialQuestion
@@ -694,7 +576,7 @@ export function WorksheetView({ style, includeAnswers, onClose }: WorksheetViewP
                 {items.map((item, idx) => (
                   <div key={item.id} className="ws-answer">
                     <h3 className="ws-answer-title">Question {idx + 1} — Mark Scheme</h3>
-                    <div className="ws-answer-body"><Markdown>{item.mark_scheme_markdown}</Markdown></div>
+                    <div className="ws-answer-body"><FigureAwareMarkdown>{item.mark_scheme_markdown}</FigureAwareMarkdown></div>
                   </div>
                 ))}
               </section>

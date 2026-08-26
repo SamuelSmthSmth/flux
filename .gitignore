@@ -30,3 +30,7 @@ dist-ssr
 .env.test.local
 .env.production.local
 serviceAccountKey.json
+
+# Scratch / test PDFs (copyrighted exam papers)
+test_files/
+__pycache__/

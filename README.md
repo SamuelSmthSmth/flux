@@ -36,6 +36,11 @@ Questions live in the `flux` Firestore collection. Docs carry `board`, `subBoard
 
 > Note: `serviceAccountKey.json` is deliberately **not** committed — it lives outside the repo.
 
+## Documentation
+
+- **`PROJECT.md`** — the full architecture + pipeline docs: data model, rendering (TikZ, figures, mark-scheme reveal), the A4 paper generator, the Gemini conversion pipeline, the GUI, gotchas, and the planned per-board topic lists. **Read this before touching the pipeline.**
+- **`PAPER_TEMPLATE.md`** — the markdown format for new papers (embedded in the Gemini prompt, enforced by the validator).
+
 ## Design
 
 The look is a deliberately playful "vibe-coded storybook" take on a study tool: Sora display headings, Nunito body, Caveat handwritten annotations, a green→blue accent gradient in both light and dark mode, and a floating layer of math symbols drifting behind the UI. All colors flow through CSS variables (`:root` / `[data-theme="dark"]`), and every animation respects `prefers-reduced-motion`.

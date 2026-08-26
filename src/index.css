@@ -1746,7 +1746,7 @@
 .official-figure-area {
   min-height: 110px; padding: 12px 14px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 10.5px; font-style: italic; color: #333;
+  font-size: 9.5px; font-style: italic; color: #333;
   background-image:
     linear-gradient(rgba(17, 17, 17, 0.06) 1px, transparent 1px),
     linear-gradient(90deg, rgba(17, 17, 17, 0.06) 1px, transparent 1px);
@@ -1755,7 +1755,7 @@
 .official-figure-area span { display: block; max-width: 90%; }
 .official-figure figcaption {
   border-top: 1px solid #999;
-  font-size: 10.5px; font-weight: 700; padding: 4px 0;
+  font-size: 9.5px; font-weight: 700; padding: 4px 0;
   color: #222;
 }
 
@@ -1861,4 +1861,146 @@
   .ws-question { page-break-before: always; break-before: page; min-height: 0; }
   .ws-answers { page-break-before: always; break-before: page; }
   .ws-answer { page-break-inside: auto; break-inside: auto; }
+}
+
+/* ─── TikZ diagrams (```tikz blocks) ────────────────────────────────
+   Rendered by TikZJax, which replaces <script type="text/tikz"> with an
+   SVG inside a .tikzjax-wrapper. The reserved min-height keeps layout
+   (and the paper's page packer) stable while TeX compiles async. */
+.tikz-diagram {
+  margin: 10px 0;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tikz-diagram[data-tikz-status="rendered"] { min-height: 0; }
+.tikz-diagram-note {
+  font-size: 0.85em;
+  opacity: 0.55;
+  font-style: italic;
+  border: 1px dashed currentColor;
+  border-radius: 8px;
+  padding: 14px 20px;
+}
+.tikz-diagram[data-tikz-status="error"] .tikz-diagram-note {
+  color: #c0392b;
+  opacity: 0.9;
+}
+.tikz-diagram .tikzjax-wrapper svg {
+  max-width: 100%;
+  height: auto;
+}
+/* Inside the fixed-A4 paper, diagrams scale into a bounded band so they
+   never blow the page: the packer measures the reserved height, and the
+   rendered SVG is capped at the same size. */
+.official-question-page .tikz-diagram,
+.official-ms-page .tikz-diagram {
+  min-height: 220px;
+  margin: 4px 0;
+}
+.official-question-page .tikz-diagram[data-tikz-status="rendered"],
+.official-ms-page .tikz-diagram[data-tikz-status="rendered"] {
+  min-height: 0;
+}
+.official-question-page .tikz-diagram .tikzjax-wrapper svg,
+.official-ms-page .tikz-diagram .tikzjax-wrapper svg {
+  max-height: 260px;
+  max-width: 100%;
+  width: auto;
+}
+@media print {
+  .tikz-diagram .tikzjax-wrapper { overflow: visible; }
+  .official-question-page .tikz-diagram .tikzjax-wrapper svg,
+  .official-ms-page .tikz-diagram .tikzjax-wrapper svg {
+    max-height: 260px;
+    width: auto;
+  }
+}
+
+/* TikZJax dark-mode-adapts SVG colors (white strokes for dark themes).
+   The paper is always printed white — force black ink there, while the
+   browse UI keeps the adaptive colours. */
+.worksheet-print .tikzjax-wrapper,
+.worksheet-print .tikzjax-wrapper svg {
+  color: #111 !important;
+}
+
+/* ─── Figures with diagrams (```tikz block paired with its description) ───
+   The diagram renders on top; the "Figure N — description" caption sits
+   just below it. */
+.flux-figure {
+  margin: 10px auto;
+  text-align: center;
+}
+.flux-figure .tikz-diagram { margin: 0 auto; }
+.flux-figure figcaption { margin-top: 2px; }
+.flux-figure figcaption p { margin: 0; }
+.flux-figure figcaption strong { font-weight: 700; }
+.flux-figure figcaption em { font-style: italic; }
+
+/* Paper: exam-style caption, centered under the diagram. */
+.official-page .flux-figure { margin: 8px auto; }
+.official-page .flux-figure figcaption {
+  font-size: 9.8pt;
+  color: #222;
+}
+.official-page .flux-figure figcaption em { color: #333; }
+
+/* Browse UI (cards + detail pane): caption left-aligned and muted. */
+.qcard-body .flux-figure,
+.detail-content .flux-figure {
+  margin: 10px 0;
+  text-align: left;
+}
+.qcard-body .flux-figure figcaption,
+.detail-content .flux-figure figcaption {
+  color: var(--text-subtle);
+  font-size: 0.82em;
+}
+.qcard-body .flux-figure figcaption strong,
+.detail-content .flux-figure figcaption strong {
+  color: var(--text);
+}
+
+/* Browse question cards — right-aligned per-part marks and total line,
+   matching the printed paper's treatment. */
+.qcard-parts { margin-top: 2px; }
+.qcard-total {
+  text-align: right;
+  font-size: 0.82em;
+  font-weight: 600;
+  color: var(--text-subtle);
+  margin-top: 8px;
+}
+.qcard-body .official-part-marks { color: var(--text); }
+
+/* ─── Markdown tables (Edexcel mark schemes arrive as GFM tables) ─── */
+.qcard-body table,
+.detail-content table,
+.ws-q-body table,
+.ws-answer-body table,
+.official-ms-step table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 0.92em;
+}
+.qcard-body th,
+.qcard-body td,
+.detail-content th,
+.detail-content td,
+.ws-q-body th,
+.ws-q-body td,
+.ws-answer-body th,
+.ws-answer-body td,
+.official-ms-step th,
+.official-ms-step td {
+  border: 1px solid rgba(128, 128, 128, 0.4);
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.official-ms-step th,
+.official-ms-step td {
+  border-color: #aaa;
 }

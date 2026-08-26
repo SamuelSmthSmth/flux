@@ -3,12 +3,9 @@ import { doc, getDoc, collection, query, where, limit, getDocs } from "firebase/
 import type { QueryConstraint } from "firebase/firestore";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { db } from "../firebase";
-import ReactMarkdown from "react-markdown";
-import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
-import "katex/dist/katex.min.css";
-import { fmt } from "../lib/markdown";
 import { splitMarkSchemeSteps, stepNumber } from "../lib/msSteps";
+import { FluxMarkdown, FigureAwareMarkdown } from "../components/FluxMarkdown";
+import { QuestionParts } from "../components/QuestionParts";
 import { useBriefcase } from "../briefcase-context";
 import { BriefcaseIcon } from "../briefcase";
 
@@ -634,9 +631,7 @@ export default function FluxPage() {
                   {detailTab === "mark_scheme" ? (
                     detailContent ? (
                       msSteps.length <= 1 ? (
-                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                          {fmt(detailContent)}
-                        </ReactMarkdown>
+                        <FigureAwareMarkdown>{detailContent}</FigureAwareMarkdown>
                       ) : (
                         <div className="ms-reveal">
                           {msSteps.slice(0, revealed).map((step, i) => (
@@ -645,9 +640,7 @@ export default function FluxPage() {
                               className="ms-step ms-step-reveal"
                               style={{ "--ms-delay": `${Math.min(i, 7) * 55}ms` } as React.CSSProperties}
                             >
-                              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                {fmt(step)}
-                              </ReactMarkdown>
+                              <FigureAwareMarkdown>{step}</FigureAwareMarkdown>
                             </div>
                           ))}
                           <div className="ms-reveal-actions">
@@ -679,9 +672,7 @@ export default function FluxPage() {
                     )
                   ) : (
                     detailContent ? (
-                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                        {fmt(detailContent)}
-                      </ReactMarkdown>
+                      <FluxMarkdown>{detailContent}</FluxMarkdown>
                     ) : (
                       <div style={{ opacity: 0.5 }}>Not available for this question.</div>
                     )
@@ -741,9 +732,7 @@ function QuestionCard({ q, detailId, detailTab, isSelected, onToggle, onOpenDeta
         </div>
       </div>
       <div className="qcard-body">
-        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-          {fmt(problem)}
-        </ReactMarkdown>
+        <QuestionParts md={problem} />
       </div>
 
       {(ms || er) && (

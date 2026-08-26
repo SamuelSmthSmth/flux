@@ -15,6 +15,18 @@ compiled PDF ──► split_papers.py ──► per-paper PDF ──► convert
                                      review in Obsidian → upload_full_paper.py → Firestore
 ```
 
+## 🖥️ The GUI (easiest path — use this)
+
+```bash
+python3 gui.py          # opens http://127.0.0.1:8790 in your browser
+```
+
+Zero-dependency local web app covering the whole flow on one page:
+pick the 3 PDFs (auto-detect maps `que`/`rms`/`pef` filenames), set board/sub-board/
+year/paper, Convert (streams Gemini logs), review the normalized markdown, then
+**Export to Firestore** (auto-finds `serviceAccountKey.json`, uploads `--only` that file).
+See `PROJECT.md` §8 for details.
+
 ## Why this is better than the old way
 
 - **Batch + repeatable** — one command per paper instead of manual prompting
@@ -46,10 +58,26 @@ Drop `--dry-run` to actually write the per-paper PDFs.
 python3 convert_paper.py splits/9MA0-01_2019.pdf --board Edexcel --subboard A-Level --year 2019 --paper P1
 ```
 
+If you have the paper, mark scheme and examiner report as **separate PDFs**, pass them
+in that order — each is sent to Gemini labelled so the right section is built from the
+right PDF:
+
+```bash
+python3 convert_paper.py paper.pdf ms.pdf er.pdf --board Edexcel --subboard AEA --year 2010 --paper P1
+```
+
 - `--board`/`--subboard` must match what the app queries (`Edexcel` + `A-Level` for
   standard papers, `Edexcel` + `AEA` for AEA, etc.)
 - Model default `gemini-3.6-flash` (free tier). Try `--model gemini-3.1-pro-preview` if quality lags.
 - Output: `converted/Edexcel_A-Level_2019_P1.md`
+
+### The prompt's few-shot example is `PAPER_TEMPLATE.md` (project root)
+
+`build_system_prompt()` embeds the template file as the output-format example, so the
+model always sees the exact structure — frontmatter, bold parts with marks, italic
+figure descriptions, mark-scheme steps. The template also shows where ```tikz diagram
+blocks go (right after the figure description), but the model NEVER writes them: rule 5
+forbids fenced blocks, and the diagrams are added by a human after conversion.
 
 ### Known gotchas (already handled in the script)
 - `gemini-2.5-flash` is retired for new API keys — the 3.x family is current.
@@ -57,13 +85,21 @@ python3 convert_paper.py splits/9MA0-01_2019.pdf --board Edexcel --subboard A-Le
   internal reasoning, truncating output (`finishReason: MAX_TOKENS` at ~300 visible tokens).
   The script sets `maxOutputTokens: 65536` — do not lower it.
 
-### 3. Validate
+### 3. Normalize + validate
+
+The model transcribes content well but often invents its own section structure
+(`## Part 1: Question Paper`, plain `### Question N` headers, a transcribed
+cover page, no frontmatter). `normalize_converted.py` reshapes that into the
+required structure — bold `### **Question N**` / `### **Mark Scheme N**` /
+`### **Examiner Report N**` headers and strips the cover noise:
 
 ```bash
+python3 normalize_converted.py converted/       # safe to run twice
 python3 validate_paper.py converted/
 ```
 
-Fails loudly on structural errors; warns on soft issues (unknown subtopics).
+The validator fails loudly on structural errors; it warns on soft issues
+(missing frontmatter is fine — the uploader's `classify()` assigns topics).
 
 ### 4. Review in Obsidian
 
@@ -75,6 +111,12 @@ looks off). This is the same review loop you already had, minus the bulk work.
 
 The `flux` markdown files go into `~/Documents/firebase stuff/data/flux/` and run
 `upload_full_paper.py` as before (it needs `serviceAccountKey.json` in that folder).
+To upload a single reviewed paper:
+
+```bash
+cd "~/Documents/firebase stuff"
+python3 upload_full_paper.py --only Edexcel_A-Level_2023_P1.md
+```
 
 ## Pilot plan
 
