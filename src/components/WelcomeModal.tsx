@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 interface Commit { sha: string; commit: { message: string; author: { date: string } }; }
 interface FallbackEntry { message: string; date: string; }
@@ -12,10 +12,10 @@ const FALLBACK: FallbackEntry[] = [
   { message: "Mark schemes & examiner reports now inline per question.", date: new Date().toISOString() },
 ];
 
-const TOUR = [
-  {
-    name: "How Flux works",
-    desc: "Filter thousands of A-Level past-paper questions by topic, exam board, and tier. Every question comes with its official mark scheme and examiner commentary."  },
+const STEPS = [
+  { num: "1", title: "Pick your tier", desc: "Standard keeps you on the A-Level syllabus — Edexcel, OCR, MEI. Advanced unlocks AEA, MAT and MadAsMaths for the brave." },
+  { num: "2", title: "Choose a topic", desc: "Wander the topic tree, filter by name, and drill into a subtopic — or search a whole topic at once." },
+  { num: "3", title: "Find questions", desc: "Every question brings its mark scheme and the examiners' report along — one click away." },
 ];
 
 function formatDate(iso: string) {
@@ -27,25 +27,27 @@ function truncate(msg: string, max = 66) {
   return f.length > max ? f.slice(0, max) + "…" : f;
 }
 
-function ExpandPanel({ open, children }: { open: boolean; children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [h, setH] = useState(0);
-  useEffect(() => { if (ref.current) setH(ref.current.scrollHeight); }, [open, children]);
-  return (
-    <div style={{ maxHeight: open ? `${h}px` : "0px", overflow: "hidden", transition: "max-height 0.3s ease" }}>
-      <div ref={ref}>{children}</div>
-    </div>
-  );
-}
-
 export default function WelcomeModal() {
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(() => !localStorage.getItem("flux_welcomed"));
   const [closing, setClosing] = useState(false);
-  const [expanded, setExpanded] = useState<string | null>(null);
   const [changelog, setChangelog] = useState<FallbackEntry[]>([]);
   const [clLoading, setClLoading] = useState(true);
 
-  useEffect(() => { if (!localStorage.getItem("flux_welcomed")) setVisible(true); }, []);
+  const close = useCallback(() => {
+    setClosing(true);
+    window.setTimeout(() => {
+      setVisible(false);
+      setClosing(false);
+      localStorage.setItem("flux_welcomed", "true");
+    }, 250);
+  }, []);
+
+  useEffect(() => {
+    if (!visible) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [visible, close]);
 
   useEffect(() => {
     if (!visible) return;
@@ -64,54 +66,51 @@ export default function WelcomeModal() {
     return () => { cancelled = true; };
   }, [visible]);
 
-  const close = () => {
-    setClosing(true);
-    setTimeout(() => { setVisible(false); setClosing(false); localStorage.setItem("flux_welcomed", "true"); }, 300);
-  };
-
   if (!visible) {
     return (
-      <button type="button" aria-label="Help" className="welcome-help-btn" onClick={() => setVisible(true)}>
+      <button type="button" aria-label="How Flux works" className="welcome-help-btn" onClick={() => setVisible(true)}>
         ?
       </button>
     );
   }
 
   return (
-    <div className="welcome-backdrop" style={{ opacity: closing ? 0 : 1, transition: 'opacity 0.25s' }} aria-modal="true" role="dialog">
-      <div className="welcome-container" style={closing ? { opacity: 0, transform: 'translateY(16px)', transition: 'all 0.25s ease-in' } : {}}>
+    <div
+      className="welcome-backdrop"
+      style={{ opacity: closing ? 0 : 1, transition: 'opacity 0.25s' }}
+      onClick={close}
+      aria-modal="true"
+      role="dialog"
+      aria-label="Welcome to Flux"
+    >
+      <div
+        className="welcome-container"
+        style={closing ? { opacity: 0, transform: 'translateY(16px)', transition: 'all 0.25s ease-in' } : {}}
+        onClick={e => e.stopPropagation()}
+      >
         <div className="welcome-header">
           <div className="welcome-title-row">
             <h1 className="welcome-title">Welcome to <span className="welcome-title-accent">Flux</span></h1>
             <span className="welcome-beta">BETA</span>
           </div>
-          <p className="welcome-subtitle">A searchable question bank for advanced mathematics.</p>
+          <p className="welcome-subtitle">
+            A question bank for advanced mathematics — every past-paper question, mark scheme and examiner note, gathered in one place.
+          </p>
         </div>
 
         <div className="welcome-body">
           <div>
             <p className="welcome-section-label">How it works</p>
             <div className="welcome-cards">
-              {TOUR.map(s => {
-                const open = expanded === s.name;
-                return (
-                  <div key={s.name} role="button" tabIndex={0} aria-expanded={open}
-                    className={`welcome-card ${open ? 'open' : ''}`}
-                    onClick={() => setExpanded(open ? null : s.name)}
-                    onKeyDown={e => (e.key === "Enter" || e.key === " ") && setExpanded(open ? null : s.name)}
-                  >
-                    <div className="welcome-card-top">
-                      <span className="welcome-card-tag">Flux</span>
-                      <span className={`welcome-card-chevron ${open ? 'open' : ''}`} aria-hidden="true">›</span>
-                    </div>
-                    <p className="welcome-card-desc">{s.desc}</p>
-                    <ExpandPanel open={open}>
-                      <div className="welcome-card-how" style={{ borderTop: '1px solid var(--border)' }}>
-                      </div>
-                    </ExpandPanel>
+              {STEPS.map(s => (
+                <div key={s.num} className="welcome-card">
+                  <div className="welcome-card-top">
+                    <span className="welcome-step-num">{s.num}</span>
+                    <span className="welcome-step-title">{s.title}</span>
                   </div>
-                );
-              })}
+                  <p className="welcome-card-desc">{s.desc}</p>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -138,7 +137,7 @@ export default function WelcomeModal() {
 
         <div className="welcome-warning">
           <span>—</span>
-          <p>Flux is in active development. Content may be incomplete.</p>
+          <p>Flux is still finding its feet. Some corners of the archive are missing, and things may shift without warning.</p>
         </div>
 
         <div className="welcome-footer">

@@ -1,82 +1,45 @@
-# Misty
+# Flux
 
-Misty is an advanced, interactive mathematics learning and problem-solving dashboard. It provides a highly tailored environment designed specifically for students mastering A-Level past paper questions, mathematical proofs, and advanced competition-level mathematics.
+A searchable question bank for advanced mathematics. Filter thousands of A-Level and extension past-paper questions by topic, exam board, and tier — every question comes with its official mark scheme and the examiners' report.
 
-## Architectural Overview
+## Stack
 
-Misty is built using a modern, fast, and type-safe front-end architecture, powered by the following core technologies:
+- **React 19 + TypeScript + Vite** — the app shell and UI
+- **Tailwind CSS 4** (via `@tailwindcss/vite`) + `tw-animate-css` + the `shadcn` base preset (`shadcn/tailwind.css`)
+- **Cloud Firestore (Firebase)** — question bank + topic taxonomy (`sys_config/metadata_index`)
+- **KaTeX + react-markdown** — questions, mark schemes, and examiner reports render as math-enabled markdown
+- **@vercel/analytics** — traffic analytics
 
-*   **React and TypeScript**: The core application logic and structural components are built in TypeScript using React's hook-based state management.
-*   **Vite**: Acts as the ultra-fast build tool and development server, supporting hot module replacement (HMR).
-*   **Tailwind CSS**: A utility-first CSS framework configured to deliver a premium, dark-mode-first visual language featuring smooth animations, responsive sizing, and a glassmorphic aesthetic.
-*   **Cloud Firestore (Firebase)**: A scalable, flexible NoSQL cloud database providing dynamic loading of past paper questions, subtopics, and exam board indexes.
-*   **KaTeX & React Markdown**: Math expressions (including LaTeX blocks and inline formulas) are parsed and rendered server-side and client-side with typographic precision.
+## Scripts
 
----
+```bash
+npm run dev      # start the dev server
+npm run build    # typecheck (tsc -b) + production build
+npm run lint     # eslint
+npm run preview  # preview the production build
+```
 
-## Core Features and Modes
+## How it works
 
-The dashboard is structured into three highly optimized workspace environments, each addressing a unique phase of mathematics preparation.
+The app is a three-step flow:
 
-### 1. Flux (Hyper-Precise Question Finder)
-Designed for targeted practice, Flux allows students to locate exact past paper questions instantly.
-*   **Dynamic Filtering**: Search and filter by Subject (Mathematics, Physics, Further Maths), Difficulty (Standard, Advanced), and specific Exam Boards (Edexcel, AQA, OCR, MEI, TMUA, STEP, AEA).
-*   **Granular Topic Tree**: Drill down into specific mathematical topics and toggle multiple sub-topics simultaneously.
-*   **Twin-Pane Workspace**: Once questions are fetched, the workspace opens into a split view, allowing the student to see the question on the left and seamlessly pull up mark schemes and examiner reports on the right.
+1. **Pick your tier** — Standard (Edexcel, OCR, MEI A-Level) or Advanced (AEA, MAT, MadAsMaths).
+2. **Choose a topic** — a topic tree loaded from Firestore, searchable and drillable into subtopics.
+3. **Find questions** — up to 10 matching questions per query (cached in `localStorage`), each with Mark Scheme and Examiner Report panes.
 
-### 2. Fields (Derivation Hub)
-Fields focuses on building structural mathematical intuition through formal proofs.
-*   **Netflix-Style Discovery Library**: Horizontal scroll carousels highlighting "Essential Proofs" (e.g., Irrationality of √2, Power Rule, Infinite Primes) and "Foundational Algebra" (e.g., Completing the Square, Logarithm Rules).
-*   **Step-by-Step Derivation View**: A dedicated reading interface with progressive disclosure for steps, prerequisite tags, and interactive visualizations.
+Questions live in the `flux` Firestore collection. Docs carry `board`, `subBoard`, `topic`, `subtopic`, plus `problem_markdown`, `mark_scheme_markdown`, and `examiner_report_markdown`.
 
-### 3. Forge (Legendary Problem Vault)
-Forge is built for advanced, multi-step problem solving, pulling from elite papers like STEP II, STEP III, AEA, and the International Mathematical Olympiad (IMO).
-*   **IDE-Inspired Interface**: Designed like a developer's workspace with a clean, low-latency, active sidebar and high-contrast tabs.
-*   **Structured Problem Journey**: Encourages rigorous learning by breaking the solution down into four tabs:
-    1.  *Pre-flight*: Overview of concepts and structural warnings.
-    2.  *Hints*: Clues to prevent frustrating road-blocks without spoiling the core logic.
-    3.  *Solutions*: Fully detailed, step-by-step mathematical proofs.
-    4.  *Post-Mortem*: Key takeaways, common traps, and generalized techniques.
+## Content pipeline
 
----
+- `firebase stuff/` — upload scripts and the paper data: `all_topics_database.json` (topic taxonomy), `data/flux_backup` (converted AEA papers), plus fields/forge backups from the earlier "Misty" era.
+- `tools/convert/` — the paper→markdown conversion pipeline (PDF → markdown with question/topic metadata).
 
-## Technical Refinements and Performance
+> Note: `serviceAccountKey.json` is deliberately **not** committed — it lives outside the repo.
 
-*   **Hardware-Accelerated Animation Pipeline**: To eliminate lag spikes and heavy processing overhead on mobile and tablet GPUs, transitions avoid expensive CSS properties like overlapping radial gradient masks, blur filters, or text wave animations. Instead, the interface detects smaller screens (under 1024px) and falls back to clean, hardware-accelerated opacity fades and minor hardware-accelerated transforms.
-*   **Dynamic Metadata Indexing**: The topic hierarchy and exam board list are loaded dynamically via Firestore. This ensures that adding new questions to the database automatically updates the front-end interface, removing the need for manual client-side code changes.
-*   **Deep Linking and Persistence**: Active workspaces, search queries, and selected configurations persist during sessions to ensure uninterrupted focus.
+## Design
 
----
+The look is a deliberately playful "vibe-coded storybook" take on a study tool: Sora display headings, Nunito body, Caveat handwritten annotations, a green→blue accent gradient in both light and dark mode, and a floating layer of math symbols drifting behind the UI. All colors flow through CSS variables (`:root` / `[data-theme="dark"]`), and every animation respects `prefers-reduced-motion`.
 
-## Getting Started
+There are also two dormant theme modes in `src/index.css` (Notebook and XP) that can be enabled by setting `data-vibe` on the root element — currently unused.
 
-### Prerequisites
-
-*   Node.js (v18.0 or higher recommended)
-*   npm or yarn
-
-### Installation
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/samuel/Misty.git
-   cd Misty
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Configure Firebase environment:
-   Create a local configuration that matches the credentials found in `src/firebase.ts`.
-
-4. Start the local development server:
-   ```bash
-   npm run dev
-   ```
-
-5. Build for production:
-   ```bash
-   npm run build
-   ```
+The design guidance comes from the `web-design` skill in `.agents/skills/` (see `skills-lock.json`).

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { doc, getDoc, collection, query, where, limit, getDocs } from "firebase/firestore";
+import type { QueryConstraint } from "firebase/firestore";
 import { db } from "../firebase";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
@@ -71,12 +72,18 @@ function IconFileText({ size = 14 }: { size?: number }) {
   );
 }
 
-function LoadingState() {
+const FIND_HINTS = [
+  "Summoning your questions…",
+  "Consulting the ancient mark schemes…",
+  "Chasing the examiners' notes…",
+  "Polishing the answers…",
+];
+
+function TopProgress({ visible }: { visible: boolean }) {
+  if (!visible) return null;
   return (
-    <div className="loading-pulse-container">
-      <div className="loading-pulse" />
-      <div className="loading-pulse" style={{ animationDelay: '0.15s' }} />
-      <div className="loading-pulse" style={{ animationDelay: '0.3s' }} />
+    <div className="top-progress" aria-hidden="true">
+      <div className="top-progress-inner" />
     </div>
   );
 }
@@ -91,6 +98,24 @@ interface MetadataIndex {
 }
 
 interface ExamOption { label: string; board: string; subBoard: string; }
+
+interface QuestionDoc {
+  id: string;
+  board?: string;
+  subBoard?: string;
+  year?: string;
+  paper?: string;
+  question?: string;
+  question_number?: string;
+  topic?: string;
+  subtopic?: string;
+  problem_markdown?: string;
+  mark_scheme_markdown?: string;
+  examiner_report_markdown?: string;
+  markScheme?: string;
+  examinerNotes?: string;
+  [key: string]: unknown;
+}
 
 type Step = 1 | 2 | 3;
 type DetailTab = "mark_scheme" | "examiner_report" | null;
@@ -125,14 +150,15 @@ export default function FluxPage() {
   const [topic, setTopic] = useState("");
   const [subtopic, setSubtopic] = useState("");
 
-  const [questions, setQuestions] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<QuestionDoc[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [queryError, setQueryError] = useState<string | null>(null);
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>("mark_scheme");
-  const [detailLoading, setDetailLoading] = useState(false);
+  const [hintIndex, setHintIndex] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
 
   const sidebarRef = useRef<HTMLDivElement>(null);
   const mainScrollRef = useRef<HTMLDivElement>(null);
@@ -148,6 +174,14 @@ export default function FluxPage() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Rotating hints + elapsed timer while searching
+  useEffect(() => {
+    if (!loadingQuestions) return;
+    const h = window.setInterval(() => setHintIndex(i => (i + 1) % FIND_HINTS.length), 2200);
+    const s = window.setInterval(() => setElapsed(e => e + 1), 1000);
+    return () => { window.clearInterval(h); window.clearInterval(s); };
+  }, [loadingQuestions]);
 
   // Reset selected topic when exam board changes
   const handleExamChange = (opt: ExamOption) => {
@@ -187,6 +221,8 @@ export default function FluxPage() {
 
   const handleFind = async () => {
     if (!topic) return;
+    setHintIndex(0);
+    setElapsed(0);
     const cacheKey = `${CACHE_PREFIX}_${exam.board}_${exam.subBoard}_${topic}_${subtopic || "all"}`;
 
     // Check localStorage cache first
@@ -207,14 +243,14 @@ export default function FluxPage() {
     setLoadingQuestions(true);
     setQueryError(null);
     try {
-      const c: any[] = [
+      const c: QueryConstraint[] = [
         where("board", "==", exam.board),
         where("subBoard", "==", exam.subBoard),
         where("topic", "==", topic),
       ];
       if (subtopic) c.push(where("subtopic", "==", subtopic));
       const snap = await getDocs(query(collection(db, "flux"), ...c, limit(10)));
-      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }) as QuestionDoc);
       // Cache the results
       try { localStorage.setItem(cacheKey, JSON.stringify(docs)); } catch { /* storage full */ }
       setQuestions(docs);
@@ -239,10 +275,11 @@ export default function FluxPage() {
       <div className="flux">
         <div className="step1">
           <div className="step1-hero">
-            <h1 className="step1-title">Find the exact questions you need.</h1>
+            <h1 className="step1-title">The question you need is <span className="hl-marker">in here somewhere</span>.</h1>
             <p className="step1-subtitle">
-              Search thousands of A-Level past-paper questions by topic and exam board. Instantly see the mark scheme and examiner commentary.
+              Search thousands of A-Level past-paper questions by topic and exam board. Every one brings its mark scheme and the examiners' commentary along.
             </p>
+            <p className="story-note">psst — the answers come with the official mark schemes.</p>
           </div>
 
           <div className="step1-choices">
@@ -252,14 +289,14 @@ export default function FluxPage() {
                 type="button">
                 <span className="tier-btn-icon" style={{ color: 'var(--accent)' }}><IconBook size={24} /></span>
                 <span className="tier-btn-label">Standard</span>
-                <span className="tier-btn-desc">A-Level syllabus — Edexcel, OCR, MEI</span>
+                <span className="tier-btn-desc">The trusty A-Level syllabus — Edexcel, OCR, MEI</span>
               </button>              <button
                 className={`tier-btn ${tier === 'advanced' ? 'selected' : ''}`}
                 onClick={() => handleTierSelect('advanced')}
                 type="button">
                 <span className="tier-btn-icon" style={{ color: 'var(--accent)' }}><IconTrophy size={24} /></span>
                 <span className="tier-btn-label">Advanced</span>
-                <span className="tier-btn-desc">AEA, MAT, MadAsMaths — extension challenges</span>
+                <span className="tier-btn-desc">AEA, MAT, MadAsMaths — for the brave</span>
               </button>
             </div>
 
@@ -299,6 +336,7 @@ export default function FluxPage() {
 
     return (
       <div className="flux">
+        <TopProgress visible={loadingQuestions} />
         <div className="step2">
           <div className="step2-sidebar" key="s2sidebar">
             <div className="sidebar-top">
@@ -322,7 +360,7 @@ export default function FluxPage() {
                 </div>
               ) : topicKeys.length === 0 ? (
                 <p style={{ padding: 'var(--sp-4)', fontSize: '0.83rem', color: 'var(--text-subtle)', textAlign: 'center' }}>
-                  {search ? 'No matching topics.' : 'No questions for this board yet.'}
+                  {search ? 'Nothing matches — try another word.' : 'No questions for this board yet. The archive is still being written…'}
                 </p>
               ) : (
                 topicKeys.map(t => {
@@ -361,14 +399,14 @@ export default function FluxPage() {
           <div className="step2-main" key="s2main">
             <div style={{ textAlign: 'center', maxWidth: 360 }}>
               <h2 style={{ fontSize: '1.3rem', fontWeight: 600, marginBottom: 'var(--sp-3)', color: 'var(--text)' }}>
-                {topic ? (subtopic ? 'Ready to search' : `Browse ${topic}`) : 'Choose a topic'}
+                {topic ? (subtopic ? 'Ready to search' : `Browse ${topic}`) : 'Pick a topic from the shelf'}
               </h2>
               <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 'var(--sp-5)' }}>
                 {topic
                   ? subtopic
                     ? `${topic} · ${subtopic || 'General'} from ${exam.label}`
                     : `Pick a subtopic inside ${topic}, or search the whole topic.`
-                  : `Select a topic from the sidebar to see matching questions from ${exam.label} past papers.`}
+                  : `Choose a topic from the sidebar and we'll hunt down the matching questions from ${exam.label} papers.`}
               </p>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--sp-3)' }}>
                 <button className="back-link" onClick={goBack} type="button">
@@ -380,6 +418,15 @@ export default function FluxPage() {
               </div>
               {queryError && (
                 <p style={{ marginTop: 'var(--sp-3)', fontSize: '0.83rem', color: 'var(--danger)' }}>{queryError}</p>
+              )}
+              {loadingQuestions && (
+                <div className="finding-state" style={{ marginTop: 'var(--sp-6)' }}>
+                  <div className="finding-orb" />
+                  <p className="finding-hint">{FIND_HINTS[hintIndex]}</p>
+                  {elapsed >= 5 && (
+                    <p className="finding-note">Still looking after {elapsed}s — probably the internet's fault, not yours.</p>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -397,8 +444,6 @@ export default function FluxPage() {
     setDetailId(qId);
     setDetailTab(tab);
     setSidebarOpen(false);
-    setDetailLoading(true);
-    setTimeout(() => setDetailLoading(false), 400);
   };
 
   const handleCloseDetail = () => {
@@ -412,11 +457,7 @@ export default function FluxPage() {
   };
 
   const handleDetailTabChange = (tab: DetailTab) => {
-    if (detailTab !== tab) {
-      setDetailTab(tab);
-      setDetailLoading(true);
-      setTimeout(() => setDetailLoading(false), 400);
-    }
+    if (detailTab !== tab) setDetailTab(tab);
   };
 
   const detailQuestion = detailId ? questions.find(q => q.id === detailId) : null;
@@ -462,8 +503,9 @@ export default function FluxPage() {
             {questions.length === 0 ? (
               <div className="empty-state">
                 <span className="empty-state-symbol">[  ]</span>
-                <h3 className="empty-state-title">No questions found</h3>
-                <p className="empty-state-text">Try a different topic or exam board.</p>
+                <h3 className="empty-state-title">No questions in this corner of the archive</h3>
+                <p className="empty-state-text">Wander to another topic or exam board — they're hiding somewhere.</p>
+                <p className="story-note">the questions are shy, but they exist.</p>
               </div>
             ) : (
               <div className="results-list">
@@ -552,17 +594,15 @@ export default function FluxPage() {
                 </button>
               </div>
               <div className="detail-content">
-                {detailLoading ? (
-                  <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
-                    <LoadingState />
-                  </div>
-                ) : detailContent ? (
-                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                    {fmt(detailContent)}
-                  </ReactMarkdown>
-                ) : (
-                  <div style={{ opacity: 0.5 }}>Not available for this question.</div>
-                )}
+                <div key={`${detailId}-${detailTab}`} className="detail-fade-in">
+                  {detailContent ? (
+                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                      {fmt(detailContent)}
+                    </ReactMarkdown>
+                  ) : (
+                    <div style={{ opacity: 0.5 }}>Not available for this question.</div>
+                  )}
+                </div>
               </div>
             </>
           )}
