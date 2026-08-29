@@ -93,10 +93,10 @@ function TopProgress({ visible }: { visible: boolean }) {
 /* ─── Types ──────────────────────────────────────────────────── */
 
 interface MetadataIndex {
-  boards: string[];
-  years: string[];
-  topics: Record<string, string[]>;
-  activeFilters?: Record<string, Record<string, string[]>>;
+  boards?: string[] | Record<string, string[]>;
+  years?: string[];
+  topics?: Record<string, string[]>;
+  activeFilters?: Record<string, Record<string, string[]> | Record<string, Record<string, string[]>>>;
 }
 
 interface ExamOption { label: string; board: string; subBoard: string; }
@@ -139,6 +139,18 @@ function findExam(board: string, subBoard: string): ExamOption {
   return [...ADVANCED, ...STANDARD].find(o => o.board === board && o.subBoard === subBoard) ?? STANDARD[0];
 }
 
+function normalizeSearchToken(token: string): string {
+  return token.toLowerCase().replace(/[_-]/g, " ").trim();
+}
+
+function parseSearchQuery(input: string) {
+  const tokens = input.trim().split(/\s+/).filter(Boolean).map(normalizeSearchToken);
+  const first = tokens[0] ?? "";
+  const subBoard = [...STANDARD, ...ADVANCED].find(option => option.label.toLowerCase() === first) ?? null;
+  return { tokens, subBoard, topicQuery: tokens.slice(1).join(" ") };
+}
+
+
 /* ─── Main Page ─────────────────────────────────────────────── */
 
 export default function FluxPage() {
@@ -168,6 +180,8 @@ export default function FluxPage() {
 
   const [metadata, setMetadata] = useState<MetadataIndex | null>(null);
   const [metaLoading, setMetaLoading] = useState(true);
+  const [globalQuery, setGlobalQuery] = useState(() => searchParams.get("search") ?? "");
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [questions, setQuestions] = useState<QuestionDoc[]>([]);
@@ -224,10 +238,16 @@ export default function FluxPage() {
 
   const filteredTopics = useMemo(() => {
     if (!metadata) return {} as Record<string, string[]>;
-    let topics = metadata.topics;
-    // Always prefer board-specific filters when available
-    if (metadata.activeFilters) {
-      topics = metadata.activeFilters[exam.board] ?? {};
+    let topics = metadata.topics ?? {};
+    // Prefer board + sub-board filters when generated metadata is available.
+    const boardFilters = metadata.activeFilters?.[exam.board];
+    if (boardFilters) {
+      const candidate = boardFilters as Record<string, unknown>;
+      const scoped = candidate[exam.subBoard];
+      const rawTopics = scoped && typeof scoped === "object" && !Array.isArray(scoped) ? scoped : candidate;
+      topics = Object.fromEntries(
+        Object.entries(rawTopics).filter(([, subs]) => Array.isArray(subs))
+      ) as Record<string, string[]>;
     }
     const q = search.trim().toLowerCase();
     if (!q) return topics;
@@ -240,20 +260,19 @@ export default function FluxPage() {
     return result;
   }, [metadata, search, exam]);
 
-  const CACHE_PREFIX = "flux_qcache";
-
-  // Cache key for whatever search the URL describes (board + topic + subtopic).
-  const searchKey = () => {
-    const t = searchParams.get("topic") ?? "";
-    const st = searchParams.get("subtopic") ?? "";
-    return `${CACHE_PREFIX}_${exam.board}_${exam.subBoard}_${t}_${st || "all"}`;
-  };
+  // Cache key for whatever search the URL describes.
+  const searchKey = () => `flux_qcache_${searchParams.toString()}`;
 
   // Track the most recent search so a direct load of /results re-runs it.
   const searchedKeyRef = useRef<string | null>(null);
 
   // Fetch questions for the current URL params (no navigation — caller navigates).
   const fetchQuestions = async () => {
+    const urlBoard = searchParams.get("board");
+    const urlSubBoard = searchParams.get("subBoard");
+    const urlTopic = searchParams.get("topic");
+    const urlSubtopic = searchParams.get("subtopic");
+    const urlSearch = searchParams.get("search")?.trim() ?? "";
     const key = searchKey();
     setHintIndex(0);
     setElapsed(0);
@@ -275,14 +294,20 @@ export default function FluxPage() {
     setLoadingQuestions(true);
     setQueryError(null);
     try {
-      const c: QueryConstraint[] = [
-        where("board", "==", exam.board),
-        where("subBoard", "==", exam.subBoard),
-        where("topic", "==", topic),
-      ];
-      if (subtopic) c.push(where("subtopic", "==", subtopic));
-      const snap = await getDocs(query(collection(db, "flux"), ...c, limit(10)));
-      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }) as QuestionDoc);
+      const constraints: QueryConstraint[] = [];
+      if (urlBoard) constraints.push(where("board", "==", urlBoard));
+      if (urlSubBoard) constraints.push(where("subBoard", "==", urlSubBoard));
+      if (urlTopic) constraints.push(where("topic", "==", urlTopic));
+      if (urlSubtopic) constraints.push(where("subtopic", "==", urlSubtopic));
+      if (searchParams.get("year")) constraints.push(where("year", "==", searchParams.get("year")));
+      if (searchParams.get("question")) constraints.push(where("question_number", "==", searchParams.get("question")));
+      const snap = await getDocs(query(collection(db, "flux"), ...constraints, limit(100)));
+      const docs = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }) as QuestionDoc)
+        .filter(q => !urlSearch || [q.board, q.subBoard, q.topic, q.subtopic, q.year, q.paper, q.question_number, q.question]
+          .map(value => String(value ?? "").toLowerCase())
+          .join(" ")
+          .includes(urlSearch.toLowerCase()));
       // Cache the results
       try { localStorage.setItem(key, JSON.stringify(docs)); } catch { /* storage full */ }
       setQuestions(docs);
@@ -295,11 +320,14 @@ export default function FluxPage() {
     }
   };
 
-  const handleFind = async () => {
+  const handleFind = () => {
     if (!topic) return;
-    searchedKeyRef.current = searchKey();
-    await fetchQuestions();
-    navigate("/results" + location.search);
+    const next = new URLSearchParams(searchParams);
+    next.set("board", exam.board);
+    next.set("subBoard", exam.subBoard);
+    next.set("topic", topic);
+    if (subtopic) next.set("subtopic", subtopic); else next.delete("subtopic");
+    navigate(`/results?${next.toString()}`);
   };
 
   // Re-run the search when the page is loaded directly on /results (e.g. after
@@ -307,12 +335,12 @@ export default function FluxPage() {
   // a page load, so the query needs re-fetching.
   useEffect(() => {
     if (path !== "/results") return;
-    if (!searchParams.get("topic")) return;
-    if (searchedKeyRef.current === searchKey()) return; // already searched this URL
+    if (!searchParams.get("topic") && !searchParams.get("search")) return;
+    if (searchedKeyRef.current === searchKey()) return;
     searchedKeyRef.current = searchKey();
     void fetchQuestions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [path, location.search]);
 
   const goBack = () => {
     setDetailId(null);
@@ -323,7 +351,7 @@ export default function FluxPage() {
      STEP 1 — Exam Picker (/home)
      ═══════════════════════════════════════════════ */
 
-  const step1 = (
+  /*
     <div className="flux">
       <div className="step1">
         <div className="step1-hero">
@@ -375,12 +403,101 @@ export default function FluxPage() {
       </div>
     </div>
   );
+  */
 
   /* ═══════════════════════════════════════════════
      STEP 2 — Topic Browser (/topics)
      ═══════════════════════════════════════════════ */
 
   const topicKeys = Object.keys(filteredTopics).sort();
+  const filteredTopicsForExam = (selectedExam: ExamOption) => {
+    if (!metadata) return {} as Record<string, string[]>;
+    const boardFilters = metadata.activeFilters?.[selectedExam.board];
+    if (!boardFilters) return metadata.topics ?? {};
+    const candidate = boardFilters as Record<string, unknown>;
+    const scoped = candidate[selectedExam.subBoard];
+    const rawTopics = scoped && typeof scoped === "object" && !Array.isArray(scoped) ? scoped : candidate;
+    return Object.fromEntries(Object.entries(rawTopics).filter(([, subs]) => Array.isArray(subs))) as Record<string, string[]>;
+  };
+
+  const searchSuggestions = useMemo(() => {
+    const parsed = parseSearchQuery(globalQuery);
+    const raw = globalQuery.trim();
+    if (!raw) return [...STANDARD, ...ADVANCED].map(option => ({ kind: "subBoard" as const, option, label: option.label }));
+    if (!parsed.subBoard) {
+      return [...STANDARD, ...ADVANCED]
+        .filter(option => option.label.toLowerCase().startsWith(parsed.tokens[0] ?? ""))
+        .map(option => ({ kind: "subBoard" as const, option, label: option.label }));
+    }
+    const topicQuery = parsed.topicQuery.toLowerCase();
+    const availableTopics = filteredTopicsForExam(parsed.subBoard);
+    return Object.entries(availableTopics).flatMap(([topic, subtopics]) => [
+      { kind: "topic" as const, label: topic, topic, subtopic: undefined, option: parsed.subBoard },
+      ...subtopics.map(subtopic => ({ kind: "subtopic" as const, label: `${topic} · ${subtopic || "General"}`, topic, subtopic, option: parsed.subBoard })),
+    ]).filter(entry => !topicQuery || `${entry.topic} ${entry.subtopic ?? ""}`.toLowerCase().includes(topicQuery)).slice(0, 8);
+  }, [globalQuery, metadata]);
+
+  const runGlobalSearch = (value = globalQuery) => {
+    const parsed = parseSearchQuery(value);
+    if (!parsed.subBoard) {
+      setSearchError("Choose a sub-board first, such as AEA, Edexcel, or OCR.");
+      return;
+    }
+    if (!parsed.topicQuery) {
+      setSearchError("Add a topic or subtopic after the sub-board.");
+      return;
+    }
+    const next = new URLSearchParams();
+    next.set("board", parsed.subBoard.board);
+    next.set("subBoard", parsed.subBoard.subBoard);
+    next.set("search", parsed.topicQuery);
+    setExam(parsed.subBoard);
+    setQueryError(null);
+    setSearchError(null);
+    navigate(`/results?${next.toString()}`);
+  };
+
+  const selectSearchSuggestion = (suggestion: (typeof searchSuggestions)[number]) => {
+    if (!suggestion.option) return;
+    const nextValue = suggestion.kind === "subBoard"
+      ? suggestion.option.label + " "
+      : `${suggestion.option.label} ${suggestion.topic}${suggestion.subtopic ? ` ${suggestion.subtopic}` : ""}`;
+    setGlobalQuery(nextValue);
+    setSearchError(null);
+    if (suggestion.kind !== "subBoard" && window.matchMedia("(max-width: 768px)").matches) runGlobalSearch(nextValue);
+  };
+
+  const globalSearch = (
+    <form className="global-search" onSubmit={e => { e.preventDefault(); runGlobalSearch(); }}>
+      <span className="global-search-icon" aria-hidden="true">⌕</span>
+      <input value={globalQuery} onChange={e => { setGlobalQuery(e.target.value); setSearchError(null); }} placeholder="Sub-board, then topic…" aria-label="Search questions" />
+      {globalQuery && <button type="button" className="global-search-clear" onClick={() => { setGlobalQuery(""); setSearchError(null); }} aria-label="Clear search">×</button>}
+      {searchSuggestions.length > 0 && <div className="global-search-suggestions">{searchSuggestions.map((suggestion, i) => <button key={`${suggestion.kind}-${i}`} type="button" onClick={() => selectSearchSuggestion(suggestion)}><strong>{suggestion.label}</strong><span>{suggestion.kind === "subBoard" ? "Sub-board" : suggestion.subtopic ? "Subtopic" : "Topic"}</span></button>)}</div>}
+      {searchError && <span className="global-search-error" role="alert">{searchError}</span>}
+    </form>
+  );
+
+  const step1WithSearch = (
+    <div className="flux">
+      {globalSearch}
+      <div className="step1">
+        <div className="step1-hero">
+          <h1 className="step1-title">The only perfect exam board filter <span className="hl-marker">in existence</span>.</h1>
+          <p className="step1-subtitle">
+            Quite literally THE tool for any maths student or teacher during the exam season. Curated by students, for students.
+          </p>
+          <p className="story-note">psst — i know where you live so if you're mean I'll find you :p...</p>
+        </div>
+        <div className="step1-choices">
+          <div className="tier-row">              <button className={`tier-btn ${tier === 'standard' ? 'selected' : ''}`} onClick={() => handleTierSelect('standard')} type="button"><span className="tier-btn-icon" style={{ color: 'var(--accent)' }}><IconBook size={24} /></span><span className="tier-btn-label">Standard</span><span className="tier-btn-desc">The expected A-Level syllabus — Edexcel, OCR, MEI, etc</span></button>
+            <button className={`tier-btn ${tier === 'advanced' ? 'selected' : ''}`} onClick={() => handleTierSelect('advanced')} type="button"><span className="tier-btn-icon" style={{ color: 'var(--accent)' }}><IconTrophy size={24} /></span><span className="tier-btn-label">Advanced</span><span className="tier-btn-desc">More niche or advanced question sets</span></button>
+          </div>
+          <div className="board-row" key={tier}>{examOptions.map(opt => <button key={opt.label} className={`board-chip ${exam.label === opt.label ? 'selected' : ''}`} onClick={() => handleExamChange(opt)} type="button"><span className="board-chip-radio"><span className="board-chip-radio-dot" /></span>{opt.label}</button>)}</div>
+        </div>
+        <button className="cta-btn" onClick={continueToTopics} type="button">Continue <span className="cta-btn-arrow"><IconArrowRight size={16} /></span></button>
+      </div>
+    </div>
+  );
 
   const step2 = (
     <div className="flux">
@@ -686,7 +803,7 @@ export default function FluxPage() {
     </div>
   );
 
-  return step === 1 ? step1 : step === 2 ? step2 : step3;
+  return step === 1 ? step1WithSearch : step === 2 ? step2 : step3;
 }
 
 /* ─── Question card (results list) ──────────────────────────── */
